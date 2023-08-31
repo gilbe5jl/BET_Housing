@@ -8,10 +8,10 @@ from pycomm3 import LogixDriver
 #from pycomm3.cip.data_types import DINT, UINT, SINT
 import json
 #import os
-from tagLists import *
-from plcFuncs import *
-from keyenceFuncs import *
-from fileCreate import *
+from tag_lists import *
+from plc_utils import *
+from keyence_utils import *
+from export_data import *
 
 import colorama
 from colorama import Fore, Style
@@ -83,19 +83,6 @@ kill_threads = threading.Event()
 part_program = 0
 
 # END GLOBALS ####################################################
-
-def print_color(color:str,message:str)-> None:
-    logger.info(message)
-   
-    colors = ['green','red','yellow','blue']
-    if color == colors[0]:
-        print_green(message)
-    elif color == colors[1]:
-        print_red(message)
-    elif color == colors[2]:
-        print_yellow(message)
-    elif color == colors[3]:
-        print_blue(message)
 # Debug
 def print_green(message:str)->None:
     logger.debug(message)
@@ -138,7 +125,7 @@ class cycler:
         kill_threads.clear()
         event.wait()
         time.sleep(.05)
-        print_color("blue",f'({machine_num}) Sequence Started')
+        print_blue(f'({machine_num}) Sequence Started')
 
         config_info = read_config()
 
@@ -172,14 +159,14 @@ class cycler:
                     print_red(f'({machine_num}) kill_threads detected at cycle start! Restarting threads...\n')
                     break
                 #spec_map = check_keyene_spec(sock, spec_map)
-                print_color('green',f'({machine_num}) Reading PLC\n')
+                print_green(f'({machine_num}) Reading PLC\n')
                 results_map = read_plc_dict(plc, machine_num) #initial PLC tag read
                 part_type = results_map[config_info['tags']['PartType']][1]
                 
                 
                 # PLC read and check to reset system off PLC(Reset) tag
                 reset_check = read_plc_single(plc, machine_num, 'Reset')
-                if (reset_check[config_info['tags']['Reset']][1] == True):
+                if (reset_check[config_info['tags']['Reset']][1]):
                     print_yellow(f'({machine_num}) (Pre-Load) Reset Detected! Setting back to Stage 0...\n')
                     self.current_stage = 0
 
@@ -215,23 +202,19 @@ class cycler:
                     # Send all data to PLC (ex.Program #,Branch #, Scan #) #
                     ########################################################
                     print_yellow(f'({machine_num}) Stage 0: Listening for PLC(LOAD_PROGRAM) to go HIGH\n({machine_num}) Waiting for PLC(BUSY) to go LOW\n') #reading PLC until LOAD_PROGRAM goes high
-                    # logger.info(f'({machine_num}) Stage 0: Listening for PLC(LOAD_PROGRAM) = 1\n')
                     while(results_map[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high 
                         
                        
                         if (kill_threads.is_set() or reset_events[threading.current_thread()].is_set()):
                             print_red(f'({machine_num}) kill_threads detected while waiting for LOAD! Restarting threads...\n')
-                            # logger.warning(f'({machine_num}) kill_threads detected while waiting for LOAD! Restarting threads...')
                             break
                         results_map = read_plc_dict(plc, machine_num) #continuous full PLC read
                         
                         reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
                         if (reset_check[config_info['tags']['Reset']][1] == True):
                             print_red(f'({machine_num}) (Pre-Load) Reset Detected! Setting back to Stage 0...\n')
-                            # logger.warning(f'({machine_num}) (Pre-Load) Reset Detected! Setting back to Stage 0...')
                             self.current_stage = 0
                             print_yellow(f'({machine_num}) Flushing PLC(Result) tag data...\n')
-                            # logger.info(f'({machine_num}) Flushing PLC(Result) tag data...\n')
                             write_plc_flush(plc,machine_num)
                             write_plc_single(plc, machine_num, 'Faulted', False)
                             write_plc_single(plc, machine_num, 'PhoenixFltCode', 0)
@@ -246,9 +229,6 @@ class cycler:
                         break
                     print_green(f'({machine_num}) PLC(LOAD_PROGRAM) went HIGH! preparing to drop READY\n')
                     print_blue(f'({machine_num}) Gathering part data and program number...\n')
-                    # logger.info('PLC(LOAD_PROGRAM) went high!\n')
-
-
                     results_map = read_plc_dict(plc, machine_num)
                     results_map_og = results_map.copy()
                     part_program = results_map[config_info['tags']['PartProgram']][1]
@@ -257,7 +237,7 @@ class cycler:
                     # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
                     write_plc_single(plc, machine_num, 'Ready', False)
                     print_yellow(f'({machine_num}) Dropping Phoenix(READY) low.\n')
-                    # logger.info(f'({machine_num}) Dropping Phoenix(READY) low.\n')
+
 
                     #################### Mirror ############################
                     print_yellow(f'({machine_num}) ...Mirroring Data...\n')
@@ -285,11 +265,7 @@ class cycler:
                         if current_thread in reset_events:
                                 reset_events[current_thread].set()
                 
-                    
-
-
                     pun_str = int_array_to_str(results_map['PUN'][1])
-
                     datetime_info_len_check = [str(results_map[config_info['tags']['Month']][1]), str(results_map[config_info['tags']['Day']][1]), str(results_map[config_info['tags']['Hour']][1]), str(results_map[config_info['tags']['Minute']][1]), str(results_map[config_info['tags']['Second']][1])]
 
                     #confirming all date/time fields are 2 digits (except year)
@@ -492,60 +468,76 @@ class cycler:
             
 
 #sets PLC(Heartbeat) high every second to verify we're still running and communicating
-def heartbeat(machine_num):
+def heartbeat(machine_num, reset_event):
     config_info = read_config()
+    
+    def write_heartbeat(plc, machine_num):
+        try:
+            write_plc_single(plc, machine_num, 'HeartBeat', True)
+        except Exception as error:
+            print_red(f'({machine_num}) Exception in Heartbeat {error}')
+            reset_event.set()
+
     with LogixDriver(config_info['plc_ip']) as plc:
         print_yellow(f'({machine_num}) Heartbeat thread connected to PLC. Writing \'Heartbeat\' high every 1 second\n')
         counter = 0
-        while(True):
-            try:
-                write_plc_single(plc, machine_num, 'HeartBeat', True) 
-            except Exception as error:
-                print_red(f'({machine_num}) Exception in Heartbeat {error}\n')
-                kill_threads.set()
-            #plc.write('Program:HM1450_VS' + machine_num + '.VPC1.I.Heartbeat', True)
-            if (counter%200) == 0:
-                print(f"({machine_num}) Acitve PLC Connection", end='\r')
-
+        while not (kill_threads.is_set() or reset_event.is_set()):
+            write_heartbeat(plc, machine_num)
+            if (counter % 200) == 0:
+                print(f"({machine_num}) Active PLC Connection", end='\r')
             counter += 1
             time.sleep(1)
-            if (kill_threads.is_set()):
-                print_red(f'({machine_num}) Heartbeat : kill_threads high, restarting all threads')
-                break # Kill thread if global is set True for any reason
-#END heartbeat
+        print_red(f'({machine_num}) Heartbeat: kill_threads high or reset event set, restarting all threads')
+# END heartbeat
+
 
 
 
 
 #START main()
 def main():
-    config_info = read_config()
-    cycle_list = []
-    thread_list = []
-    reset_events = {}
-    for i in list(config_info['mnKeyenceIP'].keys()):
-        ip = config_info['mnKeyenceIP'][i]
-        cycle_object = cycler(i, config_info['mnKeyenceIP'][i])
-        filePath = os.path.join(config_info['FTP_directory'] + ip + config_info['FTP_extension'])
-         #Create a reset event for the cycle thread
-        reset_event = threading.Event()
-        cycle_list.append(cycle_object)
-        cycle_thread = threading.Thread(target=cycle_object.cycle, args=[str(i), ip,reset_events], name= 'machine_'+ str(i))
-        reset_events[cycle_thread] = reset_event
-        heartbeat_threads = threading.Thread(target=heartbeat, args=[str(i)], name=f"{str(i)}_heartBeat")
+    config_info = read_config()  # Read configuration information
+    cycle_threads = []  # Store created cycle threads
+    heartbeat_threads = []  # Store created heartbeat threads
+    reset_events = {}  # Store reset events for each cycle thread
 
-
-        thread_list.append(cycle_thread)
-        thread_list.append(heartbeat_threads)
+    # Loop through machines in config
+    for machine_num in list(config_info['mnKeyenceIP'].keys()):
+        ip = config_info['mnKeyenceIP'][machine_num]
+        cycle_object = cycler(machine_num, ip)
+        cycle_threads.append(cycle_object)
+        reset_events[cycle_object] = threading.Event()
+        
+        # Create and start cycle thread
+        cycle_thread = threading.Thread(target=cycle_object.cycle, args=[machine_num, ip, reset_events], name=f"machine_{machine_num}")
         cycle_thread.start()
-        heartbeat_threads.start()    
-       
-    event.set()
-    for i in thread_list:
-        i.join()
-        if isinstance(i,threading.Thread):
-            reset_events[i].clear()
+        
+        # Create and start heartbeat thread
+        heartbeat_thread = threading.Thread(target=heartbeat, args=[machine_num, reset_events], name=f"{machine_num}_heartBeat")
+        heartbeat_thread.start()
+        
+        # Store the heartbeat thread in the list
+        heartbeat_threads.append(heartbeat_thread)
+
+    event.set()  # Signal threads to start
+
+    # Loop through cycle threads and reset them
+    for cycle_thread, heartbeat_thread in zip(cycle_threads, heartbeat_threads):
+        cycle_thread.join()
+        reset_event = reset_events[cycle_thread]
+        reset_event.set()  # Signal cycle thread to reset
+        heartbeat_thread.join()
+        
+        # Create a new cycle thread instance and start it
+        cycle_object = cycle_threads.pop(0)
+        new_cycle_thread = threading.Thread(target=cycle_object.cycle, args=[machine_num, ip, reset_events], name=f"machine_{machine_num}")
+        cycle_threads.append(cycle_object)
+        new_cycle_thread.start()
+
+    for reset_event in reset_events.values():
+        reset_event.clear()  # Clear reset events
 #END 'main'
+
 
 #implicit 'main()' declaration
 if __name__ == '__main__':

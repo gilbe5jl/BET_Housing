@@ -9,7 +9,7 @@ with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
     config_vars = json.loads(config_data)
 tags = config_vars['tags']
 
-def OTagList():
+def output_tag_list():
     returnList = [
         tags['LoadProgram'],
         tags['StartProgram'],

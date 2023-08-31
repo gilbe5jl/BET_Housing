@@ -1,9 +1,9 @@
-from plcFuncs import int_array_to_str
+from plc_utils import int_array_to_str
 import datetime
 import os
 import sys
 import json
-from tagLists import *
+from tag_lists import *
 
 with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
     config_data = config_file.read()

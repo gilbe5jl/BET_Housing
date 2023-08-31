@@ -1,2 +1,0 @@
-# BlankMiddleMan
-#PLC - Keyence Automation

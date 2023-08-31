@@ -1,9 +1,10 @@
 from pycomm3 import LogixDriver
 from pycomm3.tag import Tag
-import tagLists
+import tag_lists
 import sys
 import os
 import json
+# import MiddleManLogger as mml
 
 with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
     config_data = config_file.read()
@@ -19,18 +20,18 @@ def read_plc_dict(plc_driver:LogixDriver, machine_number:str):
     :param machine_number: The machine number of the Keyence Controller.
     :return: A dictionary of the results of the read operation.
     """
-    out_tags = tagLists.OTagList()
+    out_tags = tag_lists.output_tag_list()
     prefix = f"Program:{config_info['mnTagPrefix'][machine_number]}.O."
     readList = [f"{prefix}{tag}" for tag in out_tags] # list comprehension of tags to read
     # read() method is called on the plc_driver object, passing in the list of tags to read as an argument.
-    resultsList = plc_driver.read(*readList) # splat-read: tag, value, type, error
+    results_list = plc_driver.read(*readList) # splat-read: tag, value, type, error
     #The result object returned by read() contains value, type, and error properties, which are used to populate the values of the tuples in the resulting dictionary.
-    readDict = {}
+    read_map = {}
     #generating list of tag names, ONLY end of the full tag name
-    for result in resultsList:
+    for result in results_list:
         key = result.tag.split(".")[-1]
-        readDict[key] = (result.tag, result.value, result.type, result.error)
-    return readDict
+        read_map[key] = (result.tag, result.value, result.type, result.error)
+    return read_map
 #END read_plc_dict
 
 #Writing back to PLC to mirror data on LOAD
@@ -43,34 +44,60 @@ def write_plc(plc:LogixDriver, machine_num:str, results:dict) ->None:
     :return: None
     """
     prefix = 'Program:' + config_info['mnTagPrefix'][machine_num] + '.I.'
-    Itags = tagLists.ITagList(1)
-    for i in Itags:
+    input_tags = tag_lists.input_tag_list(1)
+    for i in input_tags:
         try:
             tag = prefix + i
             value = results[i][1]
             plc.write((tag, value))
         except KeyError as error:
-            mml.log("e",True,f'({machine_num}) PLC write ERROR! KeyError:{error}')
+            print(error)
+            # mml.log("e",True,f'({machine_num}) PLC write ERROR! KeyError:{error}')
         except Exception as error:
-            mml.log("e",True,f'({machine_num}) PLC write ERROR! Exception:{str(error)}')
+            print(error)
+            # mml.log("e",True,f'({machine_num}) PLC write ERROR! Exception:{str(error)}')
 #END write_plc
 
 # Flushes PLC data mirroring tags (to 0)
 def write_plc_flush(plc:LogixDriver, machine_num:str) -> None:
     prefix = 'Program:' + config_info['mnTagPrefix'][machine_num] + '.I.'
-    default = {
-        'PUN{64}': [0] * 64
-    }
-    Itags = tagLists.ITagList(2)
-    for tag in Itags:
+    default = {'PUN{64}': [0] * 64 }
+    input_tags = tag_lists.input_tag_list(2)
+    for tag in input_tags:
         try:
             if tag == 'PUN':
                 plc.write((prefix + tag, default['PUN{64}']))
             else:
                 plc.write((prefix + tag, 0))
         except Exception as error:
-            mml.log("e",True,f'({machine_num}) PLC flush ERROR! Exception:{str(error)}')
+            print(error)
+            # mml.log("e",True,f'({machine_num}) PLC flush ERROR! Exception:{str(error)}')
 #END write_plc_flush
+
+def write_plc_fault_flush(plc:LogixDriver,machine_num:str)-> None:
+    """
+    clearing potential fault info when resetting
+    :param plc: The LogixDriver object that is connected to the PLC system
+    :param machine_num: The machine number of the Keyence Controller
+    return none
+    """
+    fault_tag_data = {
+        'Faulted': False,
+        'PhoenixFltCode': 0,
+        'KeyenceFltCode': 0,
+        'FaultStatus': 0,
+        'Done': False,
+        'Pass': False,
+        'Busy': False,
+        'Fail': False,
+        'PartProgram': 0,
+        'Ready': True,
+    }
+    for i,j in zip(fault_tag_data.keys(),fault_tag_data.values()):
+        write_plc_single(plc, machine_num,i,j)
+
+
+
 
 # Writes a single PLC tag
 def write_plc_single(plc:LogixDriver, machine_num:str, tag_name:str, tag_val) -> None:
@@ -81,11 +108,9 @@ def write_plc_single(plc:LogixDriver, machine_num:str, tag_name:str, tag_val) ->
     :param tag_name: The name of the PLC tag to be written
     :param tag_val: The value to be written to the PLC tag
     :return: None
-    """
-   
-    
+    """    
     plc.write(('Program:' + config_info['mnTagPrefix'][machine_num] + '.I.' + config_info['tags'][tag_name], tag_val))
-    return
+
 
 
 def read_plc_single(plc:LogixDriver, machine_num:str, tag_name:str) -> dict:
@@ -125,6 +150,13 @@ def int_array_to_str(int_array:list) -> str:
     :return: A string of ASCII characters
     """
     # List comprehension to convert each integer to its corresponding ASCII character. Then join the characters into a single string
-    ret = ''.join(chr(i) for i in int_array)
-    return ret
+    string = ''.join(chr(i) for i in int_array)
+    print(f"Converting PUN toString...\n{string}")
+    return string
+    
 #END int_array_to_str
+def flush_check_pass(plc:LogixDriver,tag_name:str)->None:
+    plc.write((tag_name,0))
+    
+def write_plc_check_pass(plc:LogixDriver,machine_num:str,tag_name:str,tag_value)->None:
+    plc.write((tag_name,tag_value))
