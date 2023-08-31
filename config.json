@@ -1,0 +1,144 @@
+{
+	"plc_ip" : "120.123.249.82",
+    "mnKeyenceIP" : {
+        "3" : "172.19.145.80",
+        "4" : "172.19.146.81",
+        "5" : "172.19.147.82"
+       
+    },
+    "mnTagPrefix" : {
+        "3" : "DU050CA02.CAM01",
+        "4" : "DU050CA03.CAM01",
+        "5" : "DU050CA03.CAM02"
+    },
+    "HMI_csv" : "",
+    "FTP_directory" : "E:\\FTP\\",
+    "FTP_extension" : "\\xg\\result",
+    "tags": {
+        "LoadProgram" : "LOAD_PROGRAM",
+        "StartProgram" : "START_PROGRAM",
+        "EndProgram" : "END_PROGRAM",
+        "AbortProgram" : "ABORT_PROGRAM",
+        "Aborted" : "ABORTED",
+        "Reset" : "RESET",
+        "EndScan" : "END_SCAN",
+        "PartType" : "PART_TYPE",
+        "PartProgram" : "PART_PROGRAM",
+        "ScanNumber" : "SCAN_NUMBER",
+        "ScanSet" : "SCAN_SET",
+        "PUN" : "PUN{64}",
+        "GMPartNumber" : "GM_PART_NUMBER{8}",
+        "Module" : "MODULE",
+        "MasterPart" : "MASTER_PART",
+        "PlantCode" : "PLANT_CODE",
+        "Month" : "TIMESTAMP_MONTH",
+        "Day" : "TIMESTAMP_DAY",
+        "Year" : "TIMESTAMP_YEAR",
+        "Hour" : "TIMESTAMP_HOUR",
+        "Minute" : "TIMESTAMP_MINUTE",
+        "Second" : "TIMESTAMP_SECOND",
+        "Ready" : "READY",
+        "Busy" : "BUSY",
+        "Done" : "DONE",
+        "Pass" : "PASS",
+        "Fail" : "FAIL",
+        "MaskFail" : "MASK_FAIL",
+        "SizeFail" : "SIZE_FAIL",
+        "SpacingFail" : "SPACING_FAIL",
+        "DensityFail" : "DENSITY_FAIL",
+        "DefectNumber" : "DEFECT_NUMBER",
+        "DefectSize" : "DEFECT_SIZE",
+        "DefectZone" : "DEFECT_ZONE",
+        "Faulted" : "FAULTED",
+        "PhoenixFltCode" : "PHOENIX_FLT_CODE",
+        "KeyenceFltCode" : "KEYENCE_FLT_CODE",
+        "FaultStatus" : "FAULT_STATUS",
+        "HeartBeat" : "HEARTBEAT"
+
+
+
+
+
+    },
+
+    "PartT_switch" : {
+        "6" : "X80", 
+        "56" : "X80",
+        "36" : "X80",
+        "46" : "X80",
+        "8" : "X81",
+        "58" : "X81",
+        "38" : "X81",
+        "48" : "X81"
+    },
+
+    "scan_namesX80" : {
+        
+            "301": "TFP-INNER-A-B",
+            "302": "H351-A-B",
+            "303": "H371-H372-C-D",
+            "304": "H373-H370-A-B",
+            "305": "H350-H354-A-B",
+            "306": "H330-A-B",
+            "307": "H302-H301-A-B",
+            "308": "TFP-OUTER-A-B",
+            "309": "TFP-OUTER-C-D",
+            "310": "RESOLVER-COVER-A-B",
+            "311": "RESOLVER-COVER-C-D",
+            "312": "H355-A-B",
+            "313": "H300-C-D",
+            "401": "S-FACE-C-D",
+            "402": "S-FACE-A-B",
+            "403": "H451-H452-H453-A-B",
+            "404": "S-FACE-E-F",
+            "405": "S-FACE-G-H",
+            "406": "S-FACE-I-J-(H441)",
+            "502": "H520-A-B",
+            "501": "H500-A-B",
+            "101": "H110-H120-H130-H190-A-B",
+            "102": "H140-H150-A-B",
+            "201": "TPIM-G-H",
+            "202": "H290-H291-A-B",
+            "203": "TPIM-C-D-H206",
+            "204": "TPIM-E-F-H213",
+            "205": "TPIM-A-B"
+        
+      },
+
+    
+    "scan_namesX81" : {
+        
+        "301": "TFP-INNER-A-B",
+        "302": "H351-A-B",
+        "303": "H372-C-D",
+        "304": "H373-H370-A-B",
+        "305": "H350-H354-A-B",
+        "306": "H330-A-B",
+        "307": "H302-H301-A-B",
+        "308": "TFP-OUTER-A-B",
+        "309": "TFP-OUTER-C-D",
+        "310": "RESOLVER-COVER-A-B",
+        "311": "RESOLVER-COVER-C-D",
+        "312": "H355-A-B",
+        "313": "H300-C-D",
+        "401": "S-FACE-C-D",
+        "402": "S-FACE-A-B",
+        "403": "H451-H452-H453-A-B",
+        "404": "S-FACE-E-F",
+        "405": "S-FACE-G-H",
+        "406": "S-FACE-I-J-(H441)",
+        "502": "H520-A-B",
+        "501": "H500-A-B",
+        "101": "H110-H120-H130-H190-A-B",
+        "102": "H140-H150-A-B",
+        "201": "TPIM-G-H",
+        "202": "H290-H291-A-B",
+        "203": "TPIM-C-D-H206",
+        "204": "TPIM-E-F-H213",
+        "205": "TPIM-A-B"
+        
+      }
+      
+
+
+}
