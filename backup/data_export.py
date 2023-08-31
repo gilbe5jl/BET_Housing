@@ -1,4 +1,4 @@
-from plcFuncs import int_array_to_str
+from plc_utils import int_array_to_str
 import datetime
 import os
 import sys

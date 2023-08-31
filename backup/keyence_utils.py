@@ -4,8 +4,8 @@ import datetime
 
 from pycomm3 import LogixDriver
 
-from plcFuncs import write_plc_single
-from plcFuncs import read_plc_single, int_array_to_str
+from plc_utils import write_plc_single
+from plc_utils import read_plc_single, int_array_to_str
 import tagLists
 from pycomm3.tag import Tag
 import tagLists

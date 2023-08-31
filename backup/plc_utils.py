@@ -4,7 +4,6 @@ import tagLists
 import sys
 import os
 import json
-import MiddleManLogger as mml
 
 with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
     config_data = config_file.read()
