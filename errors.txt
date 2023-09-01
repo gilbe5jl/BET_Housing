@@ -1,0 +1,35 @@
+Traceback (most recent call last):
+  File "c:\BET_Housing_Python\BET_Housing-main\main copy.py", line 472, in <module>
+    main()
+  File "c:\BET_Housing_Python\BET_Housing-main\main copy.py", line 453, in main    
+    cycle_thread.join()
+    ^^^^^^^^^^^^^^^^^
+AttributeError: 'cycler' object has no attribute 'join'
+
+
+
+Exception in thread machine_4:
+Traceback (most recent call last):
+  File "C:\Users\keyence-user\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1038, in _bootstrap_inner
+    self.run()
+  File "C:\Users\keyence-user\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 975, in run
+    self._target(*self._args, **self._kwargs)
+  File "c:\BET_Housing_Python\BET_Housing-main\main copy.py", line 144, in cycle    
+    if (kill_threads.is_set() or reset_events[threading.current_thread()].is_set()):
+                                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: <Thread(machine_4, started 4724)>
+
+
+
+
+
+Exception in thread 5_heartBeat:  
+Traceback (most recent call last):
+  File "C:\Users\keyence-user\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1038, in _bootstrap_inner
+    self.run()
+  File "C:\Users\keyence-user\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 975, in run
+    self._target(*self._args, **self._kwargs)
+  File "c:\BET_Housing_Python\BET_Housing-main\main copy.py", line 415, in heartbeat
+    while not (kill_threads.is_set() or reset_event.is_set()):
+                                        ^^^^^^^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'is_set'
