@@ -54,14 +54,9 @@
         "KeyenceFltCode" : "KEYENCE_FLT_CODE",
         "FaultStatus" : "FAULT_STATUS",
         "HeartBeat" : "HEARTBEAT"
-
-
-
-
-
     },
 
-    "PartT_switch" : {
+    "part_type_switch" : {
         "6" : "X80", 
         "56" : "X80",
         "36" : "X80",

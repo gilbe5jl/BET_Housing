@@ -1,3 +1,23 @@
+'''
+ ___________
+||         ||            _______
+|| PHOENIX ||           | _____ |
+|| IMAGING ||           ||_____||
+||_________||           |  ___  |
+|  + + + +  |           | |___| |
+    _|_|_   \           |       |
+   (_____)   \          |       |
+              \    ___  |       |
+       ______  \__/   \_|       |
+      |   _  |      _/  |       |
+      |  ( ) |     /    |_______|
+      |___|__|    /         V:9.1.23
+           \_____/
+'''
+
+
+
+
 import socket
 import time
 import datetime
@@ -51,7 +71,7 @@ def keyence_string_generator(machine_num: str, PartT: int, results_dict: dict, s
 # used to ensure the correct Keyence program is loaded for the part being processed 
 def keyence_swap_check(sock: socket.socket, machine_num: str, partType: int):
     try:
-        scanSet = config_info["PartT_switch"][str(partType)]
+        scanSet = config_info["part_type_switch"][str(partType)]
         sock.sendall('PR\r\n'.encode())
         keyence_value = int(sock.recv(32).decode().split(',')[2].split('\\')[0][3])
         
@@ -174,76 +194,59 @@ def monitor_keyence_not_running(sock: socket.socket, machine_num: str):
 
 
 # read defect information from the Keyence, then passes that as well as pass,fail,done to PLC, returns a list of result data for .txt file creation
-def keyenceResults_to_PLC(sock:socket.socket, plc:LogixDriver, machine_num:str):
-    #read results from Keyence then pass to proper tags on PLC
-    result_messages = ['MR,#ReportDefectCount\r\n', 'MR,#ReportLargestDefectSize\r\n', 'MR,#ReportLargestDefectZoneNumber\r\n', 'MR,#ReportPass\r\n', 'MR,#ReportFail\r\n',
-                        'MR,#ReportMaskFail\r\n', 'MR,#ReportSizeFail\r\n', 'MR,#ReportSpacingFail\r\n', 'MR,#ReportDensityFail\r\n']
-    results = []
+def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: str):
+    # Define result messages and PLC tags
+    result_mapping = {
+        '#ReportDefectCount': 'Defect_Number',
+        '#ReportLargestDefectSize': 'Defect_Size',
+        '#ReportLargestDefectZoneNumber': 'Defect_Zone',
+        '#ReportPass': 'Pass',
+        '#ReportFail': 'Fail',
+        '#ReportMaskFail': 'Mask_Fail',
+        '#ReportSizeFail': 'Size_Fail',
+        '#ReportSpacingFail': 'Spacing_Fail',
+        '#ReportDensityFail': 'Density_Fail'
+    }
 
-    # sending result messages to Keyence, then cleaning results to 'human-readable' list
-    for msg in result_messages:
-        sock.sendall(msg.encode())
+    # Read and store results, then write to PLC tags
+    for msg, plc_tag in result_mapping.items():
+        sock.sendall(f'MR,{msg}\r\n'.encode())
         data = sock.recv(32)
-        keyence_value_raw = str(data).split('.')
-        keyence_value_raw = keyence_value_raw[0].split('+')
-        keyence_value = int(keyence_value_raw[1])
-        results.append(keyence_value)
-        # print("KEYENCE Results RAW --",data)
-        # print("KEYENCE Results COOKED --",keyence_value)
+        keyence_value_raw = int(str(data).split('+')[1])
+        write_plc_single(plc, machine_num, plc_tag, keyence_value_raw)
 
-    print(f'({machine_num}) Defect_Number: {results[0]}')
-    print(f'({machine_num}) Defect_Size: {results[1]}')
-    print(f'({machine_num}) Defect_Zone: {results[2]}')
-    print(f'({machine_num}) Pass: {results[3]}')
-    print(f'({machine_num}) Fail: {results[4]}')
-    print(f'({machine_num}) Mask_Fail: {results[5]}')
-    print(f'({machine_num}) Size_Fail: {results[6]}')
-    print(f'({machine_num}) Spacing_Fail: {results[7]}')
-    print(f'({machine_num}) Density_Fail: {results[8]}')
-
-    # writing normalized Keyence results to proper PLC tags
-    
-
-    result_tags = tag_lists.result_tag_list()
-    for i in range(len(result_tags)):
-        write_plc_single(plc, machine_num, result_tags[i], results[i])
+    # Set 'Done' tag to True
     write_plc_single(plc, machine_num, 'Done', True)
 
+    # Print results
     print(f'({machine_num}) Keyence Results written to PLC!')
     print("===KEYENCE RESULTS ===")
-    for i in results:
-        print(i)
-    
-    return results #return results to use in result files
+    for msg, plc_tag in result_mapping.items():
+        print(f'({machine_num}) {plc_tag}: {read_plc_single(plc, machine_num, plc_tag)[plc_tag][1]}')
 
-#END keyenceResults_to_PLC
+# END keyenceResults_to_PLC
+
 
 def check_keyence_error(machine_num:str, sock:socket.socket, plc:LogixDriver):
     error_msg = 'MR,%Error0Code\r\n'
     sock.sendall(error_msg.encode())
-    data = sock.recv(32)
-    n = str(data).split('.')
-    m = n[0].split('+')
-    o = int(m[1])
-    data = o
-    if(data==0):
-        pass
-    
-    elif(data < 16):
+    data = int(sock.recv(32).decode().split('+')[1])
+    if(data < 16):
         print(f'({machine_num}) Error Code:\n',data)
         write_plc_single(plc, machine_num, 'Faulted', True)
         write_plc_single(plc, machine_num, 'PhoenixFltCode', data)
-        
-    elif(data>=16 and data!=48):
+    elif(data >= 16 and data < 48):
         print(f'({machine_num}) Error Code:\n',data)
         write_plc_single(plc, machine_num, 'Faulted', True)
         write_plc_single(plc, machine_num, 'KeyenceFltCode', data)
-        
-    elif(data==48):
-        print(f'({machine_num}) Error Code (non-crit):\n',data)
-        pass
     else:
-        pass
+        print(f'({machine_num}) Error Code (non-crit):{data}\n')
+
+
+
+
+
+
 
 def set_keyence_run_mode(machine_num:str, sock:socket.socket):
     msg = 'R0'
@@ -255,38 +258,20 @@ def set_keyence_run_mode(machine_num:str, sock:socket.socket):
 8/4/2023 
 Function to request pass/fail data for individual holes per inspection from keyence 
 '''
-def keyence_check_pass(machine_num:str,sock:socket.socket,plc:LogixDriver):
-    keyence_commands = [
-        'MR,#Hole1\r\n',
-        'MR,#Hole2\r\n',
-        'MR,#Hole3\r\n',
-        'MR,#Hole4\r\n']
+def keyence_check_pass(machine_num: str, sock: socket.socket, plc: LogixDriver):
+    keyence_commands = [f'MR,#Hole{i}\r\n' for i in range(1, 5)]
     check_pass_tags = {
-        '3':"Program:DU050CA02.CAM01.I.Check_Pass.",
-        '4':"Program:DU050CA03.CAM01.I.Check_Pass.",
-        '5':"Program:DU050CA03.CAM02.I.Check_Pass."
-        }
-    check_pass_data = [] #Used to hold response data from keyence 
-    tags = [] # Used to hold all four tag names for each robot 
-    for msg in keyence_commands: # Send all commands to keyence
-        sock.sendall(msg.encode())
+        '3': 'Program:DU050CA02.CAM01.I.Check_Pass.',
+        '4': 'Program:DU050CA03.CAM01.I.Check_Pass.',
+        '5': 'Program:DU050CA03.CAM02.I.Check_Pass.'
+    }
+
+    for cmd, tag in zip(keyence_commands, check_pass_tags.get(machine_num, [])):
+        sock.sendall(cmd.encode())
         data = sock.recv(32)
-        keyence_value_raw = str(data).split('.')
-        keyence_value_raw = keyence_value_raw[0].split('+')
-        keyence_value = int(keyence_value_raw[1])
-        check_pass_data.append(keyence_value)
-        # check_pass_data.append(data)
-        # Keyence DATA -b'ER,MR,91\r'
-        print(f"Keyence DATA -{data}")
-    for i in range(1,5):
-        x = f"{check_pass_tags[machine_num]}{i}"
-        tags.append(x) # Construct four full tag names based on machine number
-    # for i in tags:
-    #     flush_check_pass(plc, machine_num,i)
-    for i,j in zip(tags,check_pass_data):
-        # write_plc_single(plc,machine_num,i,j) # Write the check pass data to the plc 
-        write_plc_check_pass(plc,machine_num,i,j)
-        
+        keyence_value_raw = int(str(data).split('+')[1])
+        write_plc_check_pass(plc, machine_num, f"{tag}{machine_num}", keyence_value_raw)
+# END keyence_check_pass
     
 def check_pass_flush(plc,machine_num):
     check_pass_tags = {
@@ -307,15 +292,3 @@ def check_pass_flush(plc,machine_num):
 # # path = f"C:\MiddleManPython\MMHousingDeployment\{i}-Aug-{j}-2023_py.log"
 
 
-# # import os 
-# # today = datetime.date.today().strftime("%a-%b-%d-%Y")
-# try:
-#     days = ['Mon','Tue','Wed','Thu','Fri']
-#     dates = ['14','15','16','17','18']
-#     for i,j in zip(days,dates):
-#         path = f"C:\MiddleManPython\MMHousingDeployment\{i}-Aug-{j}-2023_py.log"
-#         os.remove(path)
-# except FileNotFoundError as error:
-#     message = f"Log file was NOT deleted...{error}"
-#     print(message)
-    # return message

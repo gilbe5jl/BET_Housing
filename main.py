@@ -239,8 +239,6 @@ class cycler:
                         break
                     print_green(f'({machine_num}) PLC(LOAD_PROGRAM) went HIGH! preparing to drop READY\n')
                     print_blue(f'({machine_num}) Gathering part data and program number...\n')
-                    # logger.info('PLC(LOAD_PROGRAM) went high!\n')
-
 
                     results_map = read_plc_dict(plc, machine_num)
                     results_map_og = results_map.copy()
@@ -250,11 +248,9 @@ class cycler:
                     # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
                     write_plc_single(plc, machine_num, 'Ready', False)
                     print_yellow(f'({machine_num}) Dropping Phoenix(READY) low.\n')
-                    # logger.info(f'({machine_num}) Dropping Phoenix(READY) low.\n')
 
                     #################### Mirror ############################
                     print_yellow(f'({machine_num}) ...Mirroring Data...\n')
-                    # logger.info(f'({machine_num}) !Mirroring Data!\n')
                     write_plc(plc,machine_num,results_map_og)
                     ############################################################
 
@@ -348,7 +344,7 @@ class cycler:
                     #BUSY BEFORE KEYENCE TRIGGER TEST ***
                     
                     
-                    monitor_endScan(plc, machine_num, sock) # ends Keyence with EndScan
+                    monitor_end_scan(plc, machine_num, sock) # ends Keyence with EndScan
                     end_timer_T1_to_EndScan = datetime.datetime.now()
                     diff_timer_T1_to_EndScan = (end_timer_T1_to_EndScan - start_timer_T1_to_EndProgram)
                     execution_time = diff_timer_T1_to_EndScan.total_seconds() * 1000
@@ -373,7 +369,7 @@ class cycler:
 
                     keyence_results = []
                     keyence_check_pass(machine_num,sock,plc) # Get Check/Pass data from Keyence Keyence Functions
-                    keyence_results = keyenceResults_to_PLC(sock, plc, machine_num)
+                    keyence_results = keyence_results_to_PLC(sock, plc, machine_num)
                     create_csv(machine_num, results_map, keyence_results, keyence_string, scan_duration,part_type,part_program) # results to .csv, PER SCAN
 
                     #check if we're ready to write out a parts results, PER PART

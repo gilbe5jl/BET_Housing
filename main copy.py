@@ -1,108 +1,56 @@
-#from platform import machine
+
 import threading
 import datetime, time
 import socket
-#import csv
-#from logging import debug
 from pycomm3 import LogixDriver
-#from pycomm3.cip.data_types import DINT, UINT, SINT
 import json
-#import os
 from tag_lists import *
 from plc_utils import *
 from keyence_utils import *
 from export_data import *
-
-import colorama
 from colorama import Fore, Style
-
 ##################### LOGGING ###########################
-
-import time
 import logging
 import inspect
-from inspect import currentframe, getframeinfo
-#########################################################
-'''
-DEBUG
-INFO
-WARNING
-ERROR
-CRITICAL
-The default level is WARNING, 
-only events of this level and above will be tracked, 
-unless the logging package is configured to do otherwise.
--> level=logging.WARNING
-'''
+import datetime
 current_frame = inspect.currentframe()
 frame_info = inspect.getframeinfo(current_frame)
-
 path = frame_info.filename
 filename = path.split("/")[-1]
 function_name = frame_info.function
-
 today = datetime.date.today().strftime("%a-%b-%d-%Y")
 now = datetime.datetime.now().strftime("%I:%M:%S.%f")[:-3]
-# Configure the logger
 logger = logging.getLogger(filename)
 logger.setLevel(logging.DEBUG)
-
-# Create FileHandler
-log_filename = f"{today}_py.log"
+log_filename = f"{today}_{filename}.log"  # Include filename in the log name
 handler = logging.FileHandler(log_filename)
-# old_log_file_path = "C:\MiddleManPython\MMHousingDeployment\Mon-Aug-28-2023_py.log"
-# Create logging format
-# now = str(now)
-formatter = logging.Formatter(f"{now}-%(levelname)s-%(message)s")
+formatter = logging.Formatter(f"{now} - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
-
-# Add handler to the logger
 logger.addHandler(handler)
-
-# # logging.basicConfig(level=logging.DEBUG, filename = f"{today}.log",filemode = "w",
-# # format = f"{now}-%(levelname)s-%(message)s")
-# logger = logging.getLogger(fn)
-# #Create File handler
-# handler = logging.FileHandler(f"{function_name}-{today}.log")  
-# #Create logging format
-# formatter = logging.Formatter(f"{now}-{function_name}-%(levelname)s-%(message)s")
-# #Add format to handler
-# handler.setFormatter(formatter)
-# #add the file handler to the logger
-# logger.addHandler(handler)
-# os.remove(f'C:\MiddleManPython\MMHousingDeployment\{today}.log')
-### END LOGGING ###
-
+logger.propagate = False
+handler.close()
+logger.removeHandler(handler)
+#########################################################
 
 
 ### GLOBALS ########################################################
-
 spec_map = {}
 event = threading.Event()
 kill_threads = threading.Event()
 part_program = 0
-
 # END GLOBALS ####################################################
-# Debug
 def print_green(message:str)->None:
     logger.debug(message)
     print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
-# Info
 def print_blue(message:str)->None:
     logger.info(message)
     print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
-# Warning / Info
 def print_yellow(message:str)->None:
     logger.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
-# Critical / Error
 def print_red(message:str)->None:
     logger.critical(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
-
-
-
-
 #reads config file into dict
 def read_config():
     with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
@@ -111,16 +59,13 @@ def read_config():
         return config_vars
 #END
  
-
 # primary function, to be used by 14/15 threads
 class cycler:
-    def __init__(self, machine_num, keyence_ip):
-    
+    def __init__(self, machine_num, keyence_ip):   
         self.self = self
         self.machine_num = machine_num
         self.keyence_ip = keyence_ip
         self.current_stage = 0
-
     def cycle(self, machine_num, keyence_ip,reset_events):
         kill_threads.clear()
         event.wait()
@@ -141,14 +86,8 @@ class cycler:
             sock.connect((keyence_ip, 8500))
             print_blue(f'({machine_num}) Connected to Keyence at {keyence_ip}\n')
            # setKeyenceRunMode(machine_num, sock)
-           
             write_plc_fault_flush(plc,machine_num) # Fault Codes and raise ready
-            
-          
-        
             connection_timer = datetime.datetime.now() #reset connection timer
-            
-
             ###########################
             #      CYCLE START        #
             ###########################
@@ -188,22 +127,19 @@ class cycler:
                 if(self.current_stage == 0):
                     print_yellow(f'({machine_num}) ...Stage 0...\n')
                     check_keyence_error(machine_num, sock, plc) #check keyence for error codes
-
                     print_yellow(f'({machine_num}) Setting Boolean Flags for Stage 0\n') #flag reset/beginning of timing diagram
                     write_plc_single(plc, machine_num, 'Done', False)
                     write_plc_single(plc, machine_num, 'Pass', False)
                     write_plc_single(plc, machine_num, 'Busy', False)
                     write_plc_single(plc, machine_num, 'Fail', False)
-
                     write_plc_single(plc, machine_num, 'Ready', True)
-                    
                     ########################################################
                     # When LOAD PROGRAM goes HIGH and BUSY goes low        #
                     # Send all data to PLC (ex.Program #,Branch #, Scan #) #
                     ########################################################
                     print_yellow(f'({machine_num}) Stage 0: Listening for PLC(LOAD_PROGRAM) to go HIGH\n({machine_num}) Waiting for PLC(BUSY) to go LOW\n') #reading PLC until LOAD_PROGRAM goes high
                     while(results_map[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high 
-                        
+                        # Data is only valid while LOAD_PROGRAM is low
                        
                         if (kill_threads.is_set() or reset_events[threading.current_thread()].is_set()):
                             print_red(f'({machine_num}) kill_threads detected while waiting for LOAD! Restarting threads...\n')
@@ -241,7 +177,6 @@ class cycler:
 
                     #################### Mirror ############################
                     print_yellow(f'({machine_num}) ...Mirroring Data...\n')
-                    # logger.info(f'({machine_num}) !Mirroring Data!\n')
                     write_plc(plc,machine_num,results_map_og)
                     ############################################################
 
@@ -252,10 +187,6 @@ class cycler:
                         current_thread = threading.current_thread()
                         if current_thread in reset_events:
                                 reset_events[current_thread].set()
-                    
-                    
-                    
-
                     part_type = results_map[config_info['tags']['PartType']][1]
                     print_blue(f'({machine_num}) READING PART_TYPE AFTER LOAD AS:({part_type})')
                     keyence_string = keyence_string_generator(machine_num, part_type, results_map, sock, config_info) #building out external Keyence string for scan file naming
@@ -340,7 +271,7 @@ class cycler:
                     #BUSY BEFORE KEYENCE TRIGGER TEST ***
                     
                     
-                    monitor_endScan(plc, machine_num, sock) # ends Keyence with EndScan
+                    monitor_end_scan(plc, machine_num, sock) # ends Keyence with EndScan
                     end_timer_T1_to_EndScan = datetime.datetime.now()
                     diff_timer_T1_to_EndScan = (end_timer_T1_to_EndScan - start_timer_T1_to_EndProgram)
                     execution_time = diff_timer_T1_to_EndScan.total_seconds() * 1000
@@ -365,7 +296,7 @@ class cycler:
 
                     keyence_results = []
                     keyence_check_pass(machine_num,sock,plc) # Get Check/Pass data from Keyence Keyence Functions
-                    keyence_results = keyenceResults_to_PLC(sock, plc, machine_num)
+                    keyence_results = keyence_results_to_PLC(sock, plc, machine_num)
                     create_csv(machine_num, results_map, keyence_results, keyence_string, scan_duration,part_type,part_program) # results to .csv, PER SCAN
 
                     #check if we're ready to write out a parts results, PER PART
@@ -489,10 +420,6 @@ def heartbeat(machine_num, reset_event):
             time.sleep(1)
         print_red(f'({machine_num}) Heartbeat: kill_threads high or reset event set, restarting all threads')
 # END heartbeat
-
-
-
-
 
 #START main()
 def main():
