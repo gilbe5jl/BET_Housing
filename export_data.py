@@ -13,6 +13,26 @@ input_tags = input_tag_list(2)
 results_tags = result_tag_list()
 
 
+def export_all_data(machine_num:str, results:dict, keyence_results:list, keyence_str:str, duration:int, part_type, part_program):
+    """
+    Export all data to CSV and text files.
+
+    Args:
+        machine_num (str): The machine number.
+        results (dict): A dictionary containing results data.
+        keyence_results (list): A list of Keyence results.
+        face_name (str): The face name for the file.
+        duration (int): The duration of the operation.
+        part_type: The type of the part.
+        part_program: The program associated with the part.
+        keyence_str (str): A Keyence string.
+
+    Returns:
+        None
+    """
+    create_csv(machine_num, results, keyence_results, keyence_str, duration, part_type, part_program)
+    write_part_results(machine_num, results, keyence_results, keyence_str)
+
 def create_csv(machine_num:str, results:dict, keyence_results:list, face_name:str, duration:int,part_type,part_program):
     '''
     Results data is written to a CSV file 

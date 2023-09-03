@@ -4,6 +4,8 @@ import tag_lists
 import sys
 import os
 import json
+from colorama import Fore, Style
+
 # import MiddleManLogger as mml
 
 with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
@@ -11,7 +13,8 @@ with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
     config_info = json.loads(config_data)
 
 
-
+def print_red(message:str)->None:
+    print(Fore.RED + f"{message}" + Style.RESET_ALL)
 #single-shot read of all 'arrayOutTags' off PLC
 def read_plc_dict(plc_driver:LogixDriver, machine_number:str):
     """
@@ -58,21 +61,6 @@ def write_plc(plc:LogixDriver, machine_num:str, results:dict) ->None:
             # mml.log("e",True,f'({machine_num}) PLC write ERROR! Exception:{str(error)}')
 #END write_plc
 
-# Flushes PLC data mirroring tags (to 0)
-def write_plc_flush(plc:LogixDriver, machine_num:str) -> None:
-    prefix = 'Program:' + config_info['mnTagPrefix'][machine_num] + '.I.'
-    default = {'PUN{64}': [0] * 64 }
-    input_tags = tag_lists.input_tag_list(2)
-    for tag in input_tags:
-        try:
-            if tag == 'PUN':
-                plc.write((prefix + tag, default['PUN{64}']))
-            else:
-                plc.write((prefix + tag, 0))
-        except Exception as error:
-            print(error)
-            # mml.log("e",True,f'({machine_num}) PLC flush ERROR! Exception:{str(error)}')
-#END write_plc_flush
 
 def write_plc_fault_flush(plc:LogixDriver,machine_num:str)-> None:
     """
@@ -81,6 +69,7 @@ def write_plc_fault_flush(plc:LogixDriver,machine_num:str)-> None:
     :param machine_num: The machine number of the Keyence Controller
     return none
     """
+    print(f'({machine_num}) Flushing PLC(Result) tag data...\n')
     fault_tag_data = {
         'Faulted': False,
         'PhoenixFltCode': 0,
@@ -96,7 +85,20 @@ def write_plc_fault_flush(plc:LogixDriver,machine_num:str)-> None:
     for i,j in zip(fault_tag_data.keys(),fault_tag_data.values()):
         write_plc_single(plc, machine_num,i,j)
 
-
+# Flushes PLC data mirroring tags (to 0)
+def write_plc_flush(plc:LogixDriver, machine_num:str) -> None:
+    prefix = 'Program:' + config_info['mnTagPrefix'][machine_num] + '.I.'
+    default = {'PUN{64}': [0] * 64 }
+    input_tags = tag_lists.input_tag_list(2)
+    for tag in input_tags:
+        try:
+            if tag == 'PUN':
+                plc.write((prefix + tag, default['PUN{64}']))
+            else:
+                plc.write((prefix + tag, 0))
+        except Exception as error:
+            print(error)
+#END write_plc_flush
 
 
 # Writes a single PLC tag
@@ -111,7 +113,44 @@ def write_plc_single(plc:LogixDriver, machine_num:str, tag_name:str, tag_val) ->
     """    
     plc.write(('Program:' + config_info['mnTagPrefix'][machine_num] + '.I.' + config_info['tags'][tag_name], tag_val))
 
+def reset_plc_tags(plc: LogixDriver, machine_num: str,reset_type:str) -> None:
+    """
+    Reset multiple PLC tags to their default values.
+    :param plc: The LogixDriver object that is connected to the PLC system
+    :param machine_num: The machine number of the Keyence Controller
+    :return: None
+    """
+    if reset_type == 'type_one':
+        print(f'({machine_num}) Reset detected before loading. Resetting to Stage 0...')
+        print(f'({machine_num}) Flushing PLC Fault Tags...\n')
+        write_plc_flush(plc, machine_num)
+        write_plc_single(plc, machine_num, 'Faulted', False)
+        write_plc_single(plc, machine_num, 'PhoenixFltCode', 0)
+        write_plc_single(plc, machine_num, 'KeyenceFltCode', 0)
+        write_plc_single(plc, machine_num, 'FaultStatus', 0)
+    elif reset_type == 'type_two':
+        print(f'({machine_num}) Reset detected after loading. Resetting to Stage 0...')
+        print(f'({machine_num}) Flushing PLC Fault Tags...\n')
+        write_plc_flush(plc,machine_num)
+        write_plc_single(plc, machine_num, 'Reset', False)
+        write_plc_single(plc, machine_num, 'Faulted', False)
+        write_plc_single(plc, machine_num, 'FaultStatus', 0)
+        write_plc_single(plc, machine_num, 'PhoenixFltCode', 0)
+        write_plc_single(plc, machine_num, 'KeyenceFltCode', 0)
+    elif reset_type == 'type_three':
+        write_plc_single(plc, machine_num, 'Done', False)
+        write_plc_single(plc, machine_num, 'Pass', False)
+        write_plc_single(plc, machine_num, 'Busy', False)
+        write_plc_single(plc, machine_num, 'Fail', False)
+        write_plc_single(plc, machine_num, 'Aborted', False)
 
+def set_bool_tags(plc:LogixDriver, machine_num:str) -> None:
+    print(f'({machine_num}) Setting Boolean Tags for Stage 0\n') #flag reset/beginning of timing diagram
+    write_plc_single(plc, machine_num, 'Done', False)
+    write_plc_single(plc, machine_num, 'Pass', False)
+    write_plc_single(plc, machine_num, 'Busy', False)
+    write_plc_single(plc, machine_num, 'Fail', False)
+    write_plc_single(plc, machine_num, 'Ready', True)   
 
 def read_plc_single(plc:LogixDriver, machine_num:str, tag_name:str) -> dict:
     """
@@ -160,3 +199,16 @@ def flush_check_pass(plc:LogixDriver,tag_name:str)->None:
     
 def write_plc_check_pass(plc:LogixDriver,machine_num:str,tag_name:str,tag_value)->None:
     plc.write((tag_name,tag_value))
+
+
+def write_plc_fault(plc:LogixDriver,machine_num:str,fault_type:int)->None:
+    if fault_type == 2:
+        print_red(f'({machine_num}) Trigger Keyence timeout fault (longer than 3 seconds)! PhoenixFltCode : 2')
+        write_plc_single(plc, machine_num, 'PhoenixFltCode', 2)
+        write_plc_single(plc, machine_num, 'FaultStatus', 2)
+        write_plc_single(plc, machine_num, 'Faulted', True)
+    elif fault_type == 3:
+        print_red(f'({machine_num}) TIMEOUT ERROR: Keyence not running (Execution time exceeded 3 seconds)\n\tPhoenixFltCode : 3\n')
+        write_plc_single(plc, machine_num, 'PhoenixFltCode', 3)
+        write_plc_single(plc, machine_num, 'FaultStatus', 3)
+        write_plc_single(plc, machine_num, 'Faulted', True)

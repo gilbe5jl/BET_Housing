@@ -25,7 +25,7 @@ import datetime
 from pycomm3 import LogixDriver
 
 from plc_utils import write_plc_single, write_plc_check_pass, flush_check_pass
-from plc_utils import read_plc_single, int_array_to_str
+from plc_utils import read_plc_single, int_array_to_str,reset_plc_tags,write_plc_flush
 import tag_lists
 from pycomm3.tag import Tag
 import tag_lists
@@ -87,7 +87,7 @@ def keyence_swap_check(sock: socket.socket, machine_num: str, partType: int):
 
 
 
-def trigger_keyence(sock: socket.socket, machine_num: str):
+def trigger_keyence(sock: socket.socket, machine_num: str,plc:LogixDriver):
     def read_busy():
         sock.sendall(b'MR,%Busy\r\n')
         return sock.recv(32)
@@ -107,15 +107,17 @@ def trigger_keyence(sock: socket.socket, machine_num: str):
     wait_for_busy(b'MR,+0000000001.000000\r')
     print(f'({machine_num}) Scanning\n')
     measure_execution_time(trigger_start_time, 'TriggerKeyence (Final Busy Pull)')
+    print(f'({machine_num}) Keyence Triggered!\n')
+    write_plc_single(plc, machine_num, 'Busy', True)
 # END 'TriggerKeyence'
 
 
 #sends specific Keyence Program (branch) info to pre-load/prepare Keyence for Trigger(T1), also loads naming variables for result files
-def load_keyence(sock:socket.socket, machine_num:str, partProgram:int, keyenceString:str):
-    print(f'({machine_num}) LOADING KEYENCE\n') 
+def load_keyence(sock:socket.socket, machine_num:str, partProgram:int, keyence_str:str,plc:LogixDriver):
+    print(f'({machine_num}) LOADING : {keyence_str}\n')
     branch_info = f'MW,#PhoenixControlFaceBranch,{partProgram}\r\n' # keyence message
-    stw_cmd = 'STW,0,"' + keyenceString + '\r\n' # keyence message sets image names for part
-    result_cmd = f'OW,42,"{keyenceString}-Result\r\n' # keyence message specifies output unit
+    stw_cmd = 'STW,0,"' + keyence_str + '\r\n' # keyence message sets image names for part
+    result_cmd = f'OW,42,"{keyence_str}-Result\r\n' # keyence message specifies output unit
     #need sock.recv to clear keyence buffer
     # sending branch info
     sock.sendall(branch_info.encode()) 
@@ -124,12 +126,16 @@ def load_keyence(sock:socket.socket, machine_num:str, partProgram:int, keyenceSt
     _ = sock.recv(32)
     sock.sendall(result_cmd.encode())
     _ = sock.recv(32)
-    message = 'OW,43,"' + keyenceString + '-10Lar\r\n' # keyence message output unit
+    message = 'OW,43,"' + keyence_str + '-10Lar\r\n' # keyence message output unit
     sock.sendall(message.encode())
     _ = sock.recv(32)
-    message = 'OW,44,"' + keyenceString + '-10Loc\r\n' # keyence message output unit
+    message = 'OW,44,"' + keyence_str + '-10Loc\r\n' # keyence message output unit
     sock.sendall(message.encode())
     _ = sock.recv(32)
+    print(f'({machine_num}) LOADING KEYENCE COMPLETE\n') 
+    write_plc_single(plc, machine_num, 'Ready', True)
+
+
     
 
 
@@ -181,7 +187,8 @@ def monitor_end_scan(plc: LogixDriver, machine_num: str, sock: socket.socket):
 #END monitor_endScan
 
 # function to monitor the Keyence tag 'KeyenceNotRunning', when True (+00001.00000) we know Keyence has completed result processing and FTP file write
-def monitor_keyence_not_running(sock: socket.socket, machine_num: str):
+def monitor_keyence_not_running(sock: socket.socket, machine_num: str,plc:LogixDriver):
+    write_plc_single(plc, machine_num, 'Ready', False)
     msg = 'MR,#KeyenceNotRunning\r\n'
     def check_keyence_running():
         sock.sendall(msg.encode())
@@ -194,7 +201,7 @@ def monitor_keyence_not_running(sock: socket.socket, machine_num: str):
 
 
 # read defect information from the Keyence, then passes that as well as pass,fail,done to PLC, returns a list of result data for .txt file creation
-def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: str):
+def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: str)->list:
     # Define result messages and PLC tags
     result_mapping = {
         '#ReportDefectCount': 'Defect_Number',
@@ -207,13 +214,14 @@ def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: s
         '#ReportSpacingFail': 'Spacing_Fail',
         '#ReportDensityFail': 'Density_Fail'
     }
-
+    results = []
     # Read and store results, then write to PLC tags
     for msg, plc_tag in result_mapping.items():
         sock.sendall(f'MR,{msg}\r\n'.encode())
         data = sock.recv(32)
-        keyence_value_raw = int(str(data).split('+')[1])
-        write_plc_single(plc, machine_num, plc_tag, keyence_value_raw)
+        keyence_value = int(str(data).split('+')[1])
+        write_plc_single(plc, machine_num, plc_tag, keyence_value)
+        results.append(keyence_value)
 
     # Set 'Done' tag to True
     write_plc_single(plc, machine_num, 'Done', True)
@@ -223,7 +231,7 @@ def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: s
     print("===KEYENCE RESULTS ===")
     for msg, plc_tag in result_mapping.items():
         print(f'({machine_num}) {plc_tag}: {read_plc_single(plc, machine_num, plc_tag)[plc_tag][1]}')
-
+    return results
 # END keyenceResults_to_PLC
 
 
@@ -286,7 +294,19 @@ def check_pass_flush(plc,machine_num):
         tags.append(full_tag_name)
     for i in tags:
         flush_check_pass(plc,i)
+def keyence_control_cont(sock:socket.socket, machine_num:str):
+    keyence_command = 'MW,#PhoenixControlContinue,1\r\n'
+    sock.sendall(keyence_command.encode())
+    _ = sock.recv(32) #Clearing buffer
+    print(f'({machine_num}) Sending the command "PhoenixControlContinue,1" to the Keyence controller.')
 
+def reset_toEnd_cycle(plc:LogixDriver, machine_num:str):
+    print(f'({machine_num}) PLC(END_PROGRAM) is high. Dropping PHOENIX(DONE) low\n')
+    reset_plc_tags(plc, machine_num,'type_three')
+    check_pass_flush(plc,machine_num) #Flush Check/Pass data before sending data to PLC again
+    write_plc_flush(plc,machine_num) # defaults all .I Phoenix tags at start of cycle
+    write_plc_single(plc, machine_num, 'Ready', True)
+    
 # import os 
 
 # # path = f"C:\MiddleManPython\MMHousingDeployment\{i}-Aug-{j}-2023_py.log"
