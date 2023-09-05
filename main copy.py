@@ -17,12 +17,11 @@ current_frame = inspect.currentframe()
 frame_info = inspect.getframeinfo(current_frame)
 path = frame_info.filename
 filename = path.split("/")[-1]
-function_name = frame_info.function
 today = datetime.date.today().strftime("%a-%b-%d-%Y")
 now = datetime.datetime.now().strftime("%I:%M:%S.%f")[:-3]
 logger = logging.getLogger(filename)
 logger.setLevel(logging.DEBUG)
-log_filename = f"{today}_{function_name}.log"  # Include filename in the log name
+log_filename = f"{today}_MAIN.log"  # Include filename in the log name
 handler = logging.FileHandler(log_filename)
 formatter = logging.Formatter(f"{now} - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
@@ -64,8 +63,8 @@ class cycler:
         kill_threads.clear()
         event.wait()
         time.sleep(.05)
-        print_blue(f'({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connected to Keyence at {keyence_ip}\n')
         config_info = read_config()
+        print_blue(f'({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connected to Keyence at {keyence_ip}\n')
         scan_duration = 0 # keeping track of scan time in MS
         with LogixDriver(config_info['plc_ip']) as plc: #context manager for plc connection, currently resetting connection after ~24 hrs to avoid issues
             print_green(f'({machine_num}) ...PLC Connection Successful...\n')
@@ -95,7 +94,7 @@ class cycler:
                     check_keyence_error(machine_num, sock, plc) #check keyence for error codes
                     set_bool_tags(plc, machine_num)
                     while(results_map[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high  # Data from PLC is only valid while LOAD_PROGRAM is low
-                        if (kill_threads.is_set() or reset_events[current_thread].is_set()):
+                        if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num}) kill_threads detected while waiting for LOAD! Restarting threads...\n')
                             break
                         results_map = read_plc_dict(plc, machine_num) #continuous full PLC read
@@ -108,7 +107,7 @@ class cycler:
                             if current_thread in reset_events:
                                 reset_events[current_thread].set()
                         time.sleep(.050) # 5ms pause between reads
-                    if (kill_threads.is_set() or reset_events[current_thread].is_set()):
+                    if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                         break
                     print_green(f'({machine_num}) PLC(LOAD_PROGRAM) activated. Retrieving part data and program number...') # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
                     results_map = read_plc_dict(plc, machine_num)
@@ -143,7 +142,7 @@ class cycler:
                 elif self.current_stage == 1:
                     print_yellow(f'({machine_num}) __STAGE ONE ({machine_num})__\n\tWaiting for START_PROGRAM\n')
                     while not results_map[config_info['tags']['StartProgram']][1]: #looping until PLC(START_PROGRAM) goes high
-                        if kill_threads.is_set() or reset_events[threading.current_thread()].is_set(): #check for reset at beginning of cycle
+                        if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num}) kill_threads detected while waiting for START!\n...Restarting threads...\n') 
                             break
                         results_map = read_plc_dict(plc, machine_num) #continuous PLC read
@@ -179,7 +178,7 @@ class cycler:
                     write_plc_single(plc, machine_num, 'Done', True)
                     print_yellow(f'({machine_num}) Stage 2 : Listening for PLC(ENDPROGRAM) high to reset back to Stage 0\n')
                     while not results_map[config_info['tags']['EndProgram']][1]:
-                        if kill_threads.is_set() or reset_events[threading.current_thread()].is_set():
+                        if kill_threads.is_set() or reset_events[threading.current_thread().name].is_set():
                             print_red(f'({machine_num}) kill_threads detected while waiting for ENDPROGRAM! Restarting threads...\n')
                             break
                         results_map = read_plc_dict(plc, machine_num)  # continuous PLC read
@@ -199,7 +198,7 @@ class cycler:
                     current_thread = threading.current_thread()
                     if current_thread in reset_events:
                         reset_events[current_thread].set()
-                if kill_threads.is_set() or reset_events[current_thread].is_set():
+                if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                     print_red(f'({machine_num}) kill_threads detected at cycle end! Restarting threads...\n')
                     break  # Kill thread if global is set True for any reason
                 time.sleep(0.005)  # artificial loop timer
@@ -231,8 +230,8 @@ def main():
     for machine_num in list(config_info['mnKeyenceIP'].keys()):  # Loop through machines in config
         ip = config_info['mnKeyenceIP'][machine_num]
         cycle_object = cycler(machine_num, ip)
-        reset_events[cycle_object] = threading.Event()
         cycle_thread = threading.Thread(target=cycle_object.cycle, args=[machine_num, ip, reset_events], name=f"machine_{machine_num}")
+        reset_events[cycle_thread] = threading.Event()
         cycle_thread.start()
         cycle_threads.append(cycle_thread)
         heartbeat_thread = threading.Thread(target=heartbeat, args=[machine_num, reset_events], name=f"{machine_num}_heartBeat")
