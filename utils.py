@@ -16,10 +16,10 @@ def read_config()->dict:
 def get_status_info(machine_num:str,plc:LogixDriver)->list:
     config_info = read_config()
     print(f'({machine_num}) Reading PLC\n')
-    results_map = read_plc_dict(plc, machine_num) #initial PLC tag read
-    part_type = results_map[config_info['tags']['PartType']][1]
+    tag_data = read_plc_dict(plc, machine_num) #initial PLC tag read
+    part_type = tag_data[config_info['tags']['PartType']][1]
     reset_check = read_plc_single(plc, machine_num, 'Reset')   # PLC read and check to reset system off PLC(Reset) tag
-    return [part_type, reset_check]
+    return {"part_type":part_type,"reset_check":reset_check,"tag_data":tag_data}
 
 def start_stage_zero(machine_num:str,plc:LogixDriver,sock:socket.socket,current_stage:int)->None:
     print(f'({machine_num})[STAGE:{current_stage}] Entering Stage 0: Awaiting PLC(LOAD_PROGRAM) and PLC(BUSY) state changes...')
@@ -91,5 +91,15 @@ def end_stage_one(plc: LogixDriver, sock: socket.socket, machine_num: str, tag_d
     except Exception as error:
         print(f'({machine_num}) Error in utils.py//end_stage_one: {error}')
         raise error
+    
+def get_stage_zero_data(plc:LogixDriver,machine_num:str):
+    try:
+        tag_data = read_plc_dict(plc, machine_num) #continuous full PLC read
+        reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
+        return {"tag_data":tag_data,"reset_check":reset_check}
+    except Exception as error:
+        print(f'({machine_num}) Error in utils.py//get_stage_zero_data: {error}')
+        raise error
 
 # move exe_time function to this file and call it from here so that these functions can return less variables 
+
