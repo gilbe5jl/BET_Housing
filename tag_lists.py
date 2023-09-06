@@ -84,7 +84,7 @@ def result_tag_list():
     ]
     return returnList
 
-def faultTagList():
+def fault_tag_list():
     returnList = [
         tags['Faulted'],
         tags['PhoenixFltCode'],

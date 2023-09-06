@@ -114,7 +114,7 @@ def trigger_keyence(sock: socket.socket, machine_num: str,plc:LogixDriver):
 
 #sends specific Keyence Program (branch) info to pre-load/prepare Keyence for Trigger(T1), also loads naming variables for result files
 def load_keyence(sock:socket.socket, machine_num:str, partProgram:int, keyence_str:str,plc:LogixDriver):
-    print(f'({machine_num}) LOADING : {keyence_str}\n')
+    print(f'({machine_num}) LOADING KEYENCE: {keyence_str}\n')
     branch_info = f'MW,#PhoenixControlFaceBranch,{partProgram}\r\n' # keyence message
     stw_cmd = 'STW,0,"' + keyence_str + '\r\n' # keyence message sets image names for part
     result_cmd = f'OW,42,"{keyence_str}-Result\r\n' # keyence message specifies output unit

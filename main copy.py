@@ -47,8 +47,6 @@ def print_yellow(message:str)->None:
 def print_red(message:str)->None:
     logger.critical(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
-def exe_time(start_time, end_time):
-    return (end_time - start_time).total_seconds() * 1000
 def read_config()->dict:
     with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
         config_data = config_file.read()
@@ -89,11 +87,11 @@ class cycler:
                         reset_events[current_thread].set()          
                 if(self.current_stage == 0):
                     start_stage_zero(machine_num, plc, sock, self.current_stage) #stage 0 function
-                    while(results_map[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high  # Data from PLC is only valid while LOAD_PROGRAM is low
+                    while(tag_data[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high  # Data from PLC is only valid while LOAD_PROGRAM is low
                         if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num})[STAGE:{self.current_stage}]  kill_threads detected while waiting for LOAD! Restarting threads...\n')
                             break
-                        results_map = read_plc_dict(plc, machine_num) #continuous full PLC read
+                        tag_data = read_plc_dict(plc, machine_num) #continuous full PLC read
                         reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
                         if (reset_check[config_info['tags']['Reset']][1] == True):
                             self.current_stage = 0
@@ -106,79 +104,55 @@ class cycler:
                     if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                         break
                     print_green(f'({machine_num}) PLC(LOAD_PROGRAM) activated. Retrieving part data and program number...') # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
-                    results_map = read_plc_dict(plc, machine_num)
-                    results_map_og = results_map.copy()
-                    part_program = results_map[config_info['tags']['PartProgram']][1] 
-                    print_green(f"Reading PART_PROGRAM as: {part_program}\n({machine_num}) Lowering Phoenix PLC(READY) and Mirroring Data...")
-                    write_plc_single(plc, machine_num, 'Ready', False) #setting PLC(READY) low
-                    write_plc(plc,machine_num,results_map_og) # MIRRORING DATA
-                    part_type = results_map[config_info['tags']['PartType']][1]
-                    swap_check = keyence_swap_check(sock, machine_num, part_type) #ensure keyence has proper program loaded   
+                    swap_check, part_program, part_type = stage_zero_preLoad(machine_num, plc, sock).values()
                     if swap_check == 0: # reset threads if invalid part type
                         # kill_threads.set()
                         current_thread = threading.current_thread()
                         if current_thread in reset_events:
                                 reset_events[current_thread].set()
-                    part_type = results_map[config_info['tags']['PartType']][1]
-                    print_blue(f'({machine_num}) READING PART_TYPE AFTER LOAD AS:({part_type})')
-                    keyence_string = keyence_string_generator(machine_num, part_type, results_map, sock, config_info) #building out external Keyence string for scan file naming
+                    part_type = tag_data[config_info['tags']['PartType']][1]
+                    print_blue(f'({machine_num})[STAGE:0] PRE-LOAD: Part Type({part_type})')
+                    keyence_string = keyence_string_generator(machine_num, part_type, tag_data, sock, config_info) #building out external Keyence string for scan file naming
                     if keyence_string == 'ERROR':
                         # kill_threads.set()
                         current_thread = threading.current_thread()
                         if current_thread in reset_events:
                                 reset_events[current_thread].set()
-                    pun_str = int_array_to_str(results_map['PUN'][1])
-                    datetime_info_len_check = [str(results_map[config_info['tags']['Month']][1]), str(results_map[config_info['tags']['Day']][1]), str(results_map[config_info['tags']['Hour']][1]), str(results_map[config_info['tags']['Minute']][1]), str(results_map[config_info['tags']['Second']][1])]
-                    for x in range(0,len(datetime_info_len_check)): # confirming all date/time fields are 2 digits (except year)
-                        if(int(datetime_info_len_check[x]) < 10):
-                            datetime_info_len_check[x] = '0' + datetime_info_len_check[x]
-                    keyence_string = str(pun_str[10:22]) + '_' + str(results_map[config_info['tags']['Year']][1]) + '-' + datetime_info_len_check[0] + '-' + datetime_info_len_check[1] + '-' + datetime_info_len_check[2] + '-' + datetime_info_len_check[3] + '-' + datetime_info_len_check[4] + '_' + keyence_string                     # print_blue(f'{pun_str, pun_str[10:22]} \n',  str(results_map[config_info['tags']['Year']][1]))
-                    load_keyence(sock, machine_num, str(results_map[config_info['tags']['PartProgram']][1]), keyence_string,plc ) #Keyence loading message, uses PartProgram from PLC to load specific branch and raise PLC(READY) when complete
+                    stage_zero_load(plc, sock, machine_num, tag_data) 
                     self.current_stage += 1 #increment current stage to proceed forward
                 elif self.current_stage == 1:
-                    print_yellow(f'({machine_num}) __STAGE ONE ({machine_num})__\n\tWaiting for START_PROGRAM\n')
-                    while not results_map[config_info['tags']['StartProgram']][1]: #looping until PLC(START_PROGRAM) goes high
+                    print_yellow(f'({machine_num})[STAGE:1] Waiting for START_PROGRAM...\n')
+                    while not tag_data[config_info['tags']['StartProgram']][1]: #looping until PLC(START_PROGRAM) goes high
                         if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num}) kill_threads detected while waiting for START!\n...Restarting threads...\n') 
                             break
-                        results_map = read_plc_dict(plc, machine_num) #continuous PLC read
-                        if results_map[config_info['tags']['Reset']][1]: #check for reset during cycle
+                        tag_data = read_plc_dict(plc, machine_num) #continuous PLC read
+                        if tag_data[config_info['tags']['Reset']][1]: #check for reset during cycle
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num, 'type_two') # type_two reset for stage 1
                             if threading.current_thread() in reset_events:
                                 reset_events[threading.current_thread()].set()
                         time.sleep(0.050)
-                    results_map = read_plc_dict(plc, machine_num) #continuous PLC read
-                    print_green(f'({machine_num}) PLC(START_PROGRAM) went high!\n')
-                    start_trigger_timer = datetime.datetime.now()
-                    trigger_keyence(sock, machine_num, plc) #Keyence trigger message, raises PLC(BUSY) when complete
-                    end_trigger_timer = datetime.datetime.now()
-                    if (exe_time(end_trigger_timer,start_trigger_timer) > 3000):
+                    print_green(f'({machine_num})[STAGE:1] PLC(START_PROGRAM) activated!\n')
+                    exe_time,tag_data,start_trigger_timer = stage_one_trigger(plc, sock, machine_num, tag_data).values()
+                    if (exe_time > 3000): # measure time it took to trigger keyence, if greater than 3 seconds, set fault
                         write_plc_fault(plc, machine_num, 2)
-                    monitor_end_scan(plc, machine_num, sock, plc) #monitoring PLC(END_SCAN) to ensure it goes high
-                    end_trigger_timer = datetime.datetime.now()
-                    scan_duration = (end_trigger_timer - start_trigger_timer).total_seconds() * 1000
-                    write_plc_single(plc, machine_num, 'Busy', False)
-                    start_result_timer = datetime.datetime.now()
-                    monitor_keyence_not_running(sock, machine_num) #monitoring Keyence to ensure it is not running
-                    end_result_timer = datetime.datetime.now()
-                    if exe_time(end_result_timer,start_result_timer) > 3000:
+                    scan_duration,exe_time,tag_data= stage_one_post_trigger(plc, sock, machine_num, tag_data, start_trigger_timer).values()
+                    if exe_time > 3000:
                         write_plc_fault(plc, machine_num, 3)
-                    keyence_check_pass(machine_num, sock, plc)
-                    keyence_results = keyence_results_to_PLC(sock, plc, machine_num)
-                    export_all_data(machine_num, results_map, keyence_results, keyence_string, scan_duration, part_type, part_program)
-                    keyence_control_cont(sock, machine_num)
-                    print_green(f'({machine_num}) Stage 1 Complete!\n')
+
+                    end_stage_one(plc, machine_num, sock, tag_data, scan_duration, keyence_string, part_type, part_program)
+                    print_green(f'({machine_num})[STAGE:1] Complete!\n')
                     self.current_stage += 1
                 elif self.current_stage == 2:  # Final Stage, reset to Stage 0 once PLC(END_PROGRAM) and PHOENIX(DONE) have been set low
                     write_plc_single(plc, machine_num, 'Done', True)
-                    print_yellow(f'({machine_num}) Stage 2 : Listening for PLC(ENDPROGRAM) high to reset back to Stage 0\n')
-                    while not results_map[config_info['tags']['EndProgram']][1]:
+                    print_yellow(f'({machine_num})[STAGE:2] Waiting for PLC(ENDPROGRAM)\n')
+                    while not tag_data[config_info['tags']['EndProgram']][1]:
                         if kill_threads.is_set() or reset_events[threading.current_thread().name].is_set():
                             print_red(f'({machine_num}) kill_threads detected while waiting for ENDPROGRAM! Restarting threads...\n')
                             break
-                        results_map = read_plc_dict(plc, machine_num)  # continuous PLC read
-                        if results_map[config_info['tags']['Reset']][1]:
+                        tag_data = read_plc_dict(plc, machine_num)  # continuous PLC read
+                        if tag_data[config_info['tags']['Reset']][1]:
                             print_yellow(f'({machine_num}) (StartProgram Check) Reset Detected! Setting back to Stage 0...\n')
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num, 'type_two')  # type_two reset for stage 2
