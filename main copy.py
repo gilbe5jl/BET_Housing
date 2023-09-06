@@ -9,6 +9,7 @@ from plc_utils import *
 from keyence_utils import *
 from export_data import *
 from colorama import Fore, Style
+from utils import *
 ##################### LOGGING ###########################
 import logging
 import inspect
@@ -78,10 +79,7 @@ class cycler:
                     print_red(f'({machine_num}) kill_threads detected at cycle start! Restarting threads...\n')
                     break
                 #spec_map = check_keyene_spec(sock, spec_map)
-                print_green(f'({machine_num}) Reading PLC\n')
-                results_map = read_plc_dict(plc, machine_num) #initial PLC tag read
-                part_type = results_map[config_info['tags']['PartType']][1]
-                reset_check = read_plc_single(plc, machine_num, 'Reset')   # PLC read and check to reset system off PLC(Reset) tag
+                reset_check = get_status_info(machine_num, plc)[0] #get part type and reset check from PLC
                 if (reset_check[config_info['tags']['Reset']][1]):
                     self.current_stage = 0
                     reset_plc_tags(plc, machine_num,'type_one')
@@ -90,12 +88,10 @@ class cycler:
                     if current_thread in reset_events:
                         reset_events[current_thread].set()          
                 if(self.current_stage == 0):
-                    print_yellow(f'({machine_num}) Stage 0: Awaiting PLC(LOAD_PROGRAM) and PLC(BUSY) state changes...')
-                    check_keyence_error(machine_num, sock, plc) #check keyence for error codes
-                    set_bool_tags(plc, machine_num)
+                    start_stage_zero(machine_num, plc, sock, self.current_stage) #stage 0 function
                     while(results_map[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high  # Data from PLC is only valid while LOAD_PROGRAM is low
                         if (kill_threads.is_set() or reset_events[threading.current_thread().name].is_set()): #check for reset at beginning of cycle
-                            print_red(f'({machine_num}) kill_threads detected while waiting for LOAD! Restarting threads...\n')
+                            print_red(f'({machine_num})[STAGE:{self.current_stage}]  kill_threads detected while waiting for LOAD! Restarting threads...\n')
                             break
                         results_map = read_plc_dict(plc, machine_num) #continuous full PLC read
                         reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
