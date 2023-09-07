@@ -182,14 +182,14 @@ class cycler:
                     # self.current_stage = 0
                     break  # Kill thread if global is set True for any reason
                 time.sleep(0.005)  # artificial loop timer
-        def start(self):
-            self.thread = threading.Thread(target=self.cycle, args=[self.machine_num, self.keyence_ip], name=f"machine_{self.machine_num}")
-            self.thread.start()
-        def restart(self):
-            self.thread.join()
-            self.thread = None
-            self.current_stage = 0
-            self.start()
+    def start(self):
+        self.thread = threading.Thread(target=self.cycle, args=[self.machine_num, self.keyence_ip], name=f"machine_{self.machine_num}")
+        self.thread.start()
+    def restart(self):
+        self.thread.join()
+        self.thread = None
+        self.current_stage = 0
+        self.start()
 #END class Cycler
 def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we're still running and communicating
     config_info = read_config()
