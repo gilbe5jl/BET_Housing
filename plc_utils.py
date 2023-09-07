@@ -110,7 +110,8 @@ def write_plc_single(plc:LogixDriver, machine_num:str, tag_name:str, tag_val) ->
     :param tag_name: The name of the PLC tag to be written
     :param tag_val: The value to be written to the PLC tag
     :return: None
-    """    
+    """
+    print(f'({machine_num}) Setting PLC({tag_name}) to {tag_val}')
     plc.write(('Program:' + config_info['mnTagPrefix'][machine_num] + '.I.' + config_info['tags'][tag_name], tag_val))
 
 def reset_plc_tags(plc: LogixDriver, machine_num: str,reset_type:str) -> None:

@@ -24,19 +24,30 @@ logger = logging.getLogger(filename)
 logger.setLevel(logging.DEBUG)
 log_filename = f"{today}_MAIN.log"  # Include filename in the log name
 handler = logging.FileHandler(log_filename)
-formatter = logging.Formatter(f"{now} - %(levelname)s - %(message)s")
+formatter = logging.Formatter(f"{now} - %(levelname)s -\n%(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.propagate = False
-handler.close()
-logger.removeHandler(handler)
+# handler.close()
+# logger.removeHandler(handler)
 #########################################################
 spec_map = {}
 event = threading.Event()
 kill_threads = threading.Event()
 part_program = 0
+logger.info("___Program Started___")
+def print_color(message:str)->None:
+    machine_num = str(extract_machine_num(message))
+    if machine_num == '3':
+        print_blue(message)
+    elif machine_num == '4':
+        print_green(message)
+    elif machine_num == '5':
+        print_yellow(message)
+
+
 def print_green(message:str)->None:
-    logger.debug(message)
+    logger.info(message)
     print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
 def print_blue(message:str)->None:
     logger.info(message)
@@ -63,10 +74,10 @@ class cycler:
         event.wait()
         time.sleep(.05)
         config_info = read_config()
-        print_blue(f'({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connected to Keyence at {keyence_ip}\n')
+        print_color(f'({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connected to Keyence at {keyence_ip}\n')
         scan_duration = 0 # keeping track of scan time in MS
         with LogixDriver(config_info['plc_ip']) as plc: #context manager for plc connection, currently resetting connection after ~24 hrs to avoid issues
-            print_green(f'({machine_num}) ...PLC Connection Successful...\n')
+            print_color(f'({machine_num}) ...PLC Connection Successful...\n')
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Keyence socket connections
             sock.connect((keyence_ip, 8500))
            # setKeyenceRunMode(machine_num, sock)
@@ -101,7 +112,7 @@ class cycler:
                     if swap_check == 0: # reset threads if invalid part type
                         kill_threads.set()
                     part_type = tag_data[config_info['tags']['PartType']][1]
-                    print_blue(f'({machine_num})[STAGE:0] PRE-LOAD: Part Type({part_type})')
+                    print_color(f'({machine_num})[STAGE:0] PRE-LOAD: Part Type({part_type})')
                     keyence_string = keyence_string_generator(machine_num, part_type, tag_data, sock, config_info) #building out external Keyence string for scan file naming
                     if keyence_string == 'ERROR':
                         kill_threads.set()                               
@@ -120,7 +131,7 @@ class cycler:
                             reset_plc_tags(plc, machine_num, 'type_two') # type_two reset for stage 1
                             kill_threads.set()
                         time.sleep(0.050)
-                    print_green(f'({machine_num})[STAGE:1] PLC(START_PROGRAM) activated!\n')
+                    print_color(f'({machine_num})[STAGE:1] PLC(START_PROGRAM) activated!\n')
                     exe_time,tag_data,start_trigger_timer = stage_one_trigger(plc, sock, machine_num, tag_data).values()
                     if (exe_time > 3000): # measure time it took to trigger keyence, if greater than 3 seconds, set fault
                         write_plc_fault(plc, machine_num, 2)
@@ -129,19 +140,19 @@ class cycler:
                         write_plc_fault(plc, machine_num, 3)
 
                     end_stage_one(plc, machine_num, sock, tag_data, scan_duration, keyence_string, part_type, part_program)
-                    print_green(f'({machine_num})[STAGE:1] Complete!\n')
+                    print_color(f'({machine_num})[STAGE:1] Complete!\n')
                     self.current_stage += 1
                 #################### END STAGE ONE ####################
                 elif self.current_stage == 2:  # Final Stage, reset to Stage 0 once PLC(END_PROGRAM) and PHOENIX(DONE) have been set low
                     write_plc_single(plc, machine_num, 'Done', True)
-                    print_yellow(f'({machine_num})[STAGE:2] Waiting for PLC(ENDPROGRAM)\n')
+                    print_color(f'({machine_num})[STAGE:2] Waiting for PLC(ENDPROGRAM)\n')
                     while not tag_data[config_info['tags']['EndProgram']][1]:
                         if kill_threads.is_set():
                             print_red(f'({machine_num}) kill_threads detected while waiting for ENDPROGRAM! Restarting threads...\n')
                             break
                         tag_data = read_plc_dict(plc, machine_num)  # continuous PLC read
                         if tag_data[config_info['tags']['Reset']][1]:
-                            print_yellow(f'({machine_num}) (StartProgram Check) Reset Detected! Setting back to Stage 0...\n')
+                            print_color(f'({machine_num}) (StartProgram Check) Reset Detected! Setting back to Stage 0...\n')
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num, 'type_two')  # type_two reset for stage 2
                             kill_threads.set()
@@ -166,7 +177,7 @@ def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we'
             print_red(f'({machine_num}) Exception in Heartbeat {error}')
             kill_threads.set()
     with LogixDriver(config_info['plc_ip']) as plc:
-        print_yellow(f'({machine_num}) Heartbeat thread connected to PLC. Writing \'Heartbeat\' high every 1 second\n')
+        print_color(f'({machine_num}) Heartbeat thread connected to PLC. Writing \'Heartbeat\' high every 1 second\n')
         counter = 0
         while not (kill_threads.is_set()):
             write_heartbeat(plc, machine_num)

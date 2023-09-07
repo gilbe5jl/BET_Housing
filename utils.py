@@ -102,4 +102,29 @@ def get_stage_zero_data(plc:LogixDriver,machine_num:str):
         raise error
 
 # move exe_time function to this file and call it from here so that these functions can return less variables 
+# machine_num = 3
+# message = f'({machine_num}) ...PLC Connection Successful...({machine_num})({machine_num})\n'
 
+
+def extract_machine_num(message):
+    # Find the opening parenthesis and closing parenthesis in the message
+    start_index = message.find('(')
+    end_index = message.find(')')
+
+    # Check if both parentheses are found
+    if start_index != -1 and end_index != -1:
+        # Extract the substring between the parentheses
+        machine_num_str = message[start_index + 1:end_index]
+        
+        try:
+            # Attempt to convert the extracted substring to an integer
+            machine_num = int(machine_num_str)
+            return machine_num
+        except ValueError:
+            # Handle the case where the substring cannot be converted to an integer
+            return None
+
+    return None  # Return None if the parentheses are not found
+
+# x = extract_machine_num(message)
+# print(x)

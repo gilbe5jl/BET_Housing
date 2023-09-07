@@ -14,10 +14,6 @@
       |___|__|    /         V:9.1.23
            \_____/
 '''
-
-
-
-
 import socket
 import time
 import datetime
@@ -64,50 +60,56 @@ def keyence_string_generator(machine_num: str, PartT: int, results_dict: dict, s
         scan_set = 'scan_names' + config_info['PartT_switch'][str(PartT)]
         keyence_string = config_info[scan_set][str(results_dict[config_info['tags']['PartProgram']][1])] + f'_{config_info["PartT_switch"][str(PartT)]}'
     except Exception as error:
-        print(f'({machine_num}) Error Building Keyence String Check PartProgram and PartType', error)
+        print(f'({machine_num}) Error building Keyence String: Check Part Program & Part Type', error)
         return 'ERROR-KeyenceString'
     return keyence_string
 
 # used to ensure the correct Keyence program is loaded for the part being processed 
-def keyence_swap_check(sock: socket.socket, machine_num: str, partType: int):
+def keyence_swap_check(sock: socket.socket, machine_num: str, part_type: int):
+    print(f'({machine_num}) CHECKING KEYENCE PROGRAM...')
     try:
-        scanSet = config_info["part_type_switch"][str(partType)]
+        scan_set = config_info["part_type_switch"][str(part_type)]
         sock.sendall('PR\r\n'.encode())
         keyence_value = int(sock.recv(32).decode().split(',')[2].split('\\')[0][3])
         
-        if keyence_value != partType:
-            print(f'({machine_num}) Swapping Keyence program to: {partType}')
-            sock.sendall(f'PW,1,{partType}\r\n'.encode())
+        if keyence_value != part_type:
+            print(f'({machine_num}) Swapping Keyence program to: {part_type}')
+            sock.sendall(f'PW,1,{part_type}\r\n'.encode())
             time.sleep(2)
     except KeyError as error:
-        print(f'({machine_num}) INVALID PART_TYPE: {partType}\nError: {error}\n')
+        print(f'({machine_num}) INVALID PART TYPE: {part_type}\nError during Keyence Swap Check:{error}\n')
         return 0
     except Exception as error:
-        print(f'({machine_num}) An error occurred during keyence_swap_check: {error}\n')
+        print(f'({machine_num}) An error occurred during Keyence Swap Check: {error}\n')
 
 
 
 def trigger_keyence(sock: socket.socket, machine_num: str,plc:LogixDriver):
+    print(f'({machine_num}) TRIGGERING KEYENCE...\n')
     def read_busy():
         sock.sendall(b'MR,%Busy\r\n')
         return sock.recv(32)
     def wait_for_busy(busy_value):
         while read_busy() != busy_value:
+            print(f'({machine_num}) Waiting for Keyence System...')
             time.sleep(0.2)
-    def measure_execution_time(start_time, message):
+    def measure_execution_time(start_time):
         execution_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
         if execution_time > 100:
-            print(f'({machine_num}) {message} SLOW (over 100ms)! Took {execution_time} ms!!!')
+            print(f'({machine_num}) Keyence Trigger Delayed (Over 100ms)! Execution Time: {execution_time} ms\n')
     wait_for_busy(b'MR,+0000000000.000000\r')
-    measure_execution_time(datetime.datetime.now(), 'TriggerKeyence (First Busy Pull)')
+    measure_execution_time(datetime.datetime.now())
     trigger_start_time = datetime.datetime.now()
-    sock.sendall(b'T1\r\n')
-    sock.recv(32)
-    measure_execution_time(trigger_start_time, 'TriggerKeyence (Sending T1)')
+    try:
+        sock.sendall(b'T1\r\n')
+        sock.recv(32)
+        print(f'({machine_num}) Keyence Triggered!\n')
+    except Exception as error:
+        print(f'({machine_num}) Error during Keyence Trigger: {error}\n')
+    print(f'({machine_num}) Scanning...\n')
+    measure_execution_time(trigger_start_time)
     wait_for_busy(b'MR,+0000000001.000000\r')
-    print(f'({machine_num}) Scanning\n')
-    measure_execution_time(trigger_start_time, 'TriggerKeyence (Final Busy Pull)')
-    print(f'({machine_num}) Keyence Triggered!\n')
+    measure_execution_time(trigger_start_time)
     write_plc_single(plc, machine_num, 'Busy', True)
 # END 'TriggerKeyence'
 
@@ -121,17 +123,17 @@ def load_keyence(sock:socket.socket, machine_num:str, partProgram:int, keyence_s
     #need sock.recv to clear keyence buffer
     # sending branch info
     sock.sendall(branch_info.encode()) 
-    _ = sock.recv(32)
+    sock.recv(32)
     sock.sendall(stw_cmd.encode())
-    _ = sock.recv(32)
+    sock.recv(32)
     sock.sendall(result_cmd.encode())
-    _ = sock.recv(32)
+    sock.recv(32)
     message = 'OW,43,"' + keyence_str + '-10Lar\r\n' # keyence message output unit
     sock.sendall(message.encode())
-    _ = sock.recv(32)
+    sock.recv(32)
     message = 'OW,44,"' + keyence_str + '-10Loc\r\n' # keyence message output unit
     sock.sendall(message.encode())
-    _ = sock.recv(32)
+    sock.recv(32)
     print(f'({machine_num}) LOADING KEYENCE COMPLETE\n') 
     write_plc_single(plc, machine_num, 'Ready', True)
 
@@ -158,7 +160,8 @@ def check_keyene_spec(sock:socket.socket, oldDict:dict):
 
 # sends 'TE,0' then 'TE,1' to the Keyence, resetting to original state (ready for new 'T1')
 #interrupts active scans on 'EndScan' from PLC
-def exit_keyence(sock: socket.socket):
+def exit_keyence(sock: socket.socket,machine_num:str):
+    print(f'({machine_num})EXITING KEYENCE PROGRAM...\n')
     commands = ['TE,0\r\n', 'TE,1\r\n']
     for command in commands:
         sock.sendall(command.encode())
@@ -177,24 +180,25 @@ def exit_keyence(sock: socket.socket):
 # This version uses a dictionary comprehension to initialize the current dictionary with the desired tags. 
 # It then continuously checks the PLC tags' values until both conditions are met (either EndScan or Reset is True).
 def monitor_end_scan(plc: LogixDriver, machine_num: str, sock: socket.socket):
-    print(f'({machine_num}) Listening for PLC(END_SCAN) high')
+    print(f'({machine_num}) WAITING for PLC(END_SCAN)')
     current = {tag: None for tag in ['EndScan', 'Reset']}
     while not all(tag_value[1] for tag_value in current.values()):
         current.update({tag: read_plc_single(plc, machine_num, tag) for tag in current})
         time.sleep(0.005)
     print(f'({machine_num}) End_Scan Signal Received - Scan Stopped')
-    exit_keyence(sock)  # Interrupt Keyence scan
+    exit_keyence(sock,machine_num)  # Interrupt Keyence scan
 #END monitor_endScan
 
 # function to monitor the Keyence tag 'KeyenceNotRunning', when True (+00001.00000) we know Keyence has completed result processing and FTP file write
 def monitor_keyence_not_running(sock: socket.socket, machine_num: str,plc:LogixDriver):
+    print(f'({machine_num}) Keyence performing result processing & FTP file write...\n')
     write_plc_single(plc, machine_num, 'Ready', False)
     msg = 'MR,#KeyenceNotRunning\r\n'
     def check_keyence_running():
         sock.sendall(msg.encode())
         return sock.recv(32)
-    print(f'({machine_num}) Keyence Processing...')
     while check_keyence_running() != b'MR,+0000000001.000000\r':
+        print(f'({machine_num}) Keyence Processing...')
         time.sleep(0.005)
     print(f'({machine_num}) Keyence Processing Complete!\n')
 # END monitor_KeyenceNotRunning
@@ -202,6 +206,7 @@ def monitor_keyence_not_running(sock: socket.socket, machine_num: str,plc:LogixD
 
 # read defect information from the Keyence, then passes that as well as pass,fail,done to PLC, returns a list of result data for .txt file creation
 def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: str)->list:
+    print(f'({machine_num}) SENDING RESULTS TO PLC...\n')
     # Define result messages and PLC tags
     result_mapping = {
         '#ReportDefectCount': 'Defect_Number',
@@ -227,28 +232,29 @@ def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: s
     write_plc_single(plc, machine_num, 'Done', True)
 
     # Print results
-    print(f'({machine_num}) Keyence Results written to PLC!')
-    print("===KEYENCE RESULTS ===")
+    print(f"({machine_num})KEYENCE RESULTS:")
     for msg, plc_tag in result_mapping.items():
-        print(f'({machine_num}) {plc_tag}: {read_plc_single(plc, machine_num, plc_tag)[plc_tag][1]}')
+        print(f'\t({machine_num}) {plc_tag}: {read_plc_single(plc, machine_num, plc_tag)[plc_tag][1]}')
     return results
 # END keyenceResults_to_PLC
 
 
 def check_keyence_error(machine_num:str, sock:socket.socket, plc:LogixDriver):
-    error_msg = 'MR,%Error0Code\r\n'
-    sock.sendall(error_msg.encode())
-    data = int(sock.recv(32).decode().split('+')[1])
+    # error_msg = 'MR,%Error0Code\r\n'
+    # sock.sendall(error_msg.encode())
+    # data = int(sock.recv(32).decode().split('+')[1])
+    data = 0
     if(data < 16):
-        print(f'({machine_num}) Error Code:\n',data)
+        # print(f'({machine_num}) Error Code:\n',data)
         write_plc_single(plc, machine_num, 'Faulted', True)
         write_plc_single(plc, machine_num, 'PhoenixFltCode', data)
     elif(data >= 16 and data < 48):
-        print(f'({machine_num}) Error Code:\n',data)
+        # print(f'({machine_num}) Error Code:\n',data)
         write_plc_single(plc, machine_num, 'Faulted', True)
         write_plc_single(plc, machine_num, 'KeyenceFltCode', data)
     else:
-        print(f'({machine_num}) Error Code (non-crit):{data}\n')
+        # print(f'({machine_num}) Error Code (non-crit):{data}\n')
+        pass
 
 
 
@@ -257,10 +263,10 @@ def check_keyence_error(machine_num:str, sock:socket.socket, plc:LogixDriver):
 
 
 def set_keyence_run_mode(machine_num:str, sock:socket.socket):
+    print(f'({machine_num}) SETTING KEYENCE TO RUN MODE...\n')
     msg = 'R0'
     sock.sendall(msg.encode())
     _ = sock.recv(32) #Clearing buffer
-    print(f'({machine_num}) Keyence: Setting to Run Mode')
 
 '''
 8/4/2023 
