@@ -14,20 +14,26 @@ from utils import *
 import logging
 import inspect
 import datetime
-current_frame = inspect.currentframe()
-frame_info = inspect.getframeinfo(current_frame)
-path = frame_info.filename
-filename = path.split("/")[-1]
+def configure_logger(logger_name,log_file_name):
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.DEBUG)
+    handler = logging.FileHandler(log_file_name)
+    now = datetime.datetime.now().strftime("%I:%M:%S.%f")[:-3]
+    formatter = logging.Formatter(f"{now} - %(levelname)s -\n%(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
 today = datetime.date.today().strftime("%a-%b-%d-%Y")
-now = datetime.datetime.now().strftime("%I:%M:%S.%f")[:-3]
-logger = logging.getLogger(filename)
-logger.setLevel(logging.DEBUG)
-log_filename = f"{today}_MAIN.log"  # Include filename in the log name
-handler = logging.FileHandler(log_filename)
-formatter = logging.Formatter(f"{now} - %(levelname)s -\n%(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.propagate = False
+log_file_3 = f"{today}_ROBOT(3).log"
+log_file_4 = f"{today}_ROBOT(4).log"
+log_file_5 = f"{today}_ROBOT(5).log"
+logger_r3 = configure_logger("Logger_r3",log_file_3)
+logger_r4 = configure_logger("Logger_r4",log_file_4)
+logger_r5 = configure_logger("Logger_r5",log_file_5)
+
+    
+
 # handler.close()
 # logger.removeHandler(handler)
 #########################################################
@@ -35,28 +41,31 @@ spec_map = {}
 event = threading.Event()
 kill_threads = threading.Event()
 part_program = 0
-logger.info("___Program Started___")
+# logger.info("___Program Started___")
 def print_color(message:str)->None:
     machine_num = str(extract_machine_num(message))
     if machine_num == '3':
-        print_blue(message)
-    elif machine_num == '4':
         print_green(message)
+    elif machine_num == '4':
+        print_blue(message)
     elif machine_num == '5':
         print_yellow(message)
 
 
 def print_green(message:str)->None:
-    logger.info(message)
+    # message = Fore.GREEN + f"{message}\n" + Style.RESET_ALL
+    logger_r3.info(message)
     print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
 def print_blue(message:str)->None:
-    logger.info(message)
+    logger_r4.info(message)
     print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
 def print_yellow(message:str)->None:
-    logger.info(message)
+    logger_r5.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
 def print_red(message:str)->None:
-    logger.critical(message)
+    logger_r3.critical(message)
+    logger_r4.critical(message)
+    logger_r5.critical(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
 def read_config()->dict:
     with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
@@ -77,7 +86,7 @@ class cycler:
         print_color(f'({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connected to Keyence at {keyence_ip}\n')
         scan_duration = 0 # keeping track of scan time in MS
         with LogixDriver(config_info['plc_ip']) as plc: #context manager for plc connection, currently resetting connection after ~24 hrs to avoid issues
-            print_color(f'({machine_num}) ...PLC Connection Successful...\n')
+            print_color(f'({machine_num}) PLC Connection Successful...\n')
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Keyence socket connections
             sock.connect((keyence_ip, 8500))
            # setKeyenceRunMode(machine_num, sock)
@@ -86,6 +95,7 @@ class cycler:
             while(True):
                 if(kill_threads.is_set()): #check reset at beginning of cycle
                     print_red(f'({machine_num}) kill_threads detected at cycle start! Restarting threads...\n')
+                    # self.current_stage = 0
                     break
                 #spec_map = check_keyene_spec(sock, spec_map)
                 part_type,reset_check,tag_data = get_status_info(machine_num, plc).values()#get part type and reset check from PLC
@@ -98,6 +108,7 @@ class cycler:
                     while(tag_data[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high  # Data from PLC is only valid while LOAD_PROGRAM is low
                         if (kill_threads.is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num})[STAGE:0] RESET detected while waiting for Load Program! Restarting thread...\n')
+                            # self.current_stage = 0
                             break
                         tag_data,reset_check = get_stage_zero_data(plc,machine_num).values() #get data from PLC
                         if (reset_check[config_info['tags']['Reset']][1] == True):
@@ -106,8 +117,9 @@ class cycler:
                             kill_threads.set()
                         time.sleep(.050) # 5ms pause between reads
                     if (kill_threads.is_set()): #check for reset at beginning of cycle
+                        # self.current_stage = 0
                         break
-                    print_green(f'({machine_num}) PLC(LOAD_PROGRAM) activated. Retrieving part data and program number...') # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
+                    print_color(f'({machine_num}) PLC(LOAD_PROGRAM) activated. Retrieving part data and program number...') # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
                     swap_check, part_program, part_type = stage_zero_preLoad(machine_num, plc, sock).values()
                     if swap_check == 0: # reset threads if invalid part type
                         kill_threads.set()
@@ -116,14 +128,15 @@ class cycler:
                     keyence_string = keyence_string_generator(machine_num, part_type, tag_data, sock, config_info) #building out external Keyence string for scan file naming
                     if keyence_string == 'ERROR':
                         kill_threads.set()                               
-                    stage_zero_load(plc, sock, machine_num, tag_data) 
+                    stage_zero_load(plc, sock, machine_num, tag_data,keyence_string) 
                     self.current_stage += 1 #increment current stage to proceed forward
                 elif self.current_stage == 1:
                 #################### STAGE ONE ####################
                     print_yellow(f'({machine_num})[STAGE:1] Waiting for START_PROGRAM...\n')
                     while not tag_data[config_info['tags']['StartProgram']][1]: #looping until PLC(START_PROGRAM) goes high
                         if (kill_threads.is_set()): #check for reset at beginning of cycle
-                            print_red(f'({machine_num}) kill_threads detected while waiting for START!\n...Restarting threads...\n') 
+                            print_red(f'({machine_num}) kill_threads detected while waiting for START!\n...Restarting threads...\n')
+                            # self.current_stage = 0
                             break
                         tag_data = read_plc_dict(plc, machine_num) #continuous PLC read
                         if tag_data[config_info['tags']['Reset']][1]: #check for reset during cycle
@@ -149,6 +162,7 @@ class cycler:
                     while not tag_data[config_info['tags']['EndProgram']][1]:
                         if kill_threads.is_set():
                             print_red(f'({machine_num}) kill_threads detected while waiting for ENDPROGRAM! Restarting threads...\n')
+                            # self.current_stage = 0
                             break
                         tag_data = read_plc_dict(plc, machine_num)  # continuous PLC read
                         if tag_data[config_info['tags']['Reset']][1]:
@@ -165,6 +179,7 @@ class cycler:
                     kill_threads.set()
                 if (kill_threads.is_set()): #check for reset at beginning of cycle
                     print_red(f'({machine_num}) kill_threads detected at cycle end! Restarting threads...\n')
+                    # self.current_stage = 0
                     break  # Kill thread if global is set True for any reason
                 time.sleep(0.005)  # artificial loop timer
 #END class Cycler
@@ -177,12 +192,12 @@ def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we'
             print_red(f'({machine_num}) Exception in Heartbeat {error}')
             kill_threads.set()
     with LogixDriver(config_info['plc_ip']) as plc:
-        print_color(f'({machine_num}) Heartbeat thread connected to PLC. Writing \'Heartbeat\' high every 1 second\n')
+        print_color(f'({machine_num}) Heartbeat thread connected to PLC.\n')
         counter = 0
         while not (kill_threads.is_set()):
             write_heartbeat(plc, machine_num)
             if (counter % 200) == 0:
-                print(f"({machine_num}) Active PLC Connection", end='\r')
+                print(f"({machine_num}) Active PLC Connection",end='\r')
             counter += 1
             time.sleep(1)
         print_red(f'({machine_num}) Heartbeat: kill_threads high or reset event set, restarting all threads')

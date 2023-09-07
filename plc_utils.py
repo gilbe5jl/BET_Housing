@@ -6,15 +6,56 @@ import os
 import json
 from colorama import Fore, Style
 
-# import MiddleManLogger as mml
+#
+
+def extract_machine_num(message):
+    # Find the opening parenthesis and closing parenthesis in the message
+    start_index = message.find('(')
+    end_index = message.find(')')
+
+    # Check if both parentheses are found
+    if start_index != -1 and end_index != -1:
+        # Extract the substring between the parentheses
+        machine_num_str = message[start_index + 1:end_index]
+        
+        try:
+            # Attempt to convert the extracted substring to an integer
+            machine_num = int(machine_num_str)
+            return machine_num
+        except ValueError:
+            # Handle the case where the substring cannot be converted to an integer
+            return None
+
+    return None  # Return None if the parentheses are not found
+def print_color(message:str)->None:
+    machine_num = str(extract_machine_num(message))
+    if machine_num == '3':
+        print_blue(message)
+    elif machine_num == '4':
+        print_green(message)
+    elif machine_num == '5':
+        print_yellow(message)
+
+
+def print_green(message:str)->None:
+    message = Fore.GREEN + f"{message}\n" + Style.RESET_ALL
+    # logger.info(message)
+    print(message)
+def print_blue(message:str)->None:
+    # logger.info(message)
+    print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
+def print_yellow(message:str)->None:
+    # logger.info(message)
+    print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
+def print_red(message:str)->None:
+    # logger.critical(message)
+    print(Fore.RED + f"{message}" + Style.RESET_ALL)
 
 with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
     config_data = config_file.read()
     config_info = json.loads(config_data)
 
 
-def print_red(message:str)->None:
-    print(Fore.RED + f"{message}" + Style.RESET_ALL)
 #single-shot read of all 'arrayOutTags' off PLC
 def read_plc_dict(plc_driver:LogixDriver, machine_number:str):
     """
@@ -54,10 +95,10 @@ def write_plc(plc:LogixDriver, machine_num:str, results:dict) ->None:
             value = results[i][1]
             plc.write((tag, value))
         except KeyError as error:
-            print(error)
+            print_red(error)
             # mml.log("e",True,f'({machine_num}) PLC write ERROR! KeyError:{error}')
         except Exception as error:
-            print(error)
+            print_red(error)
             # mml.log("e",True,f'({machine_num}) PLC write ERROR! Exception:{str(error)}')
 #END write_plc
 
@@ -69,7 +110,7 @@ def write_plc_fault_flush(plc:LogixDriver,machine_num:str)-> None:
     :param machine_num: The machine number of the Keyence Controller
     return none
     """
-    print(f'({machine_num}) Flushing PLC(Result) tag data...\n')
+    print_color(f'({machine_num}) Flushing PLC(Result) tag data...\n')
     fault_tag_data = {
         'Faulted': False,
         'PhoenixFltCode': 0,
@@ -97,7 +138,7 @@ def write_plc_flush(plc:LogixDriver, machine_num:str) -> None:
             else:
                 plc.write((prefix + tag, 0))
         except Exception as error:
-            print(error)
+            print_red(error)
 #END write_plc_flush
 
 
@@ -111,7 +152,8 @@ def write_plc_single(plc:LogixDriver, machine_num:str, tag_name:str, tag_val) ->
     :param tag_val: The value to be written to the PLC tag
     :return: None
     """
-    print(f'({machine_num}) Setting PLC({tag_name}) to {tag_val}')
+    # if tag_name != 'HeartBeat':
+    #     print_color(f'({machine_num}) Setting PLC({tag_name}) to {tag_val}')
     plc.write(('Program:' + config_info['mnTagPrefix'][machine_num] + '.I.' + config_info['tags'][tag_name], tag_val))
 
 def reset_plc_tags(plc: LogixDriver, machine_num: str,reset_type:str) -> None:
@@ -122,16 +164,16 @@ def reset_plc_tags(plc: LogixDriver, machine_num: str,reset_type:str) -> None:
     :return: None
     """
     if reset_type == 'type_one':
-        print(f'({machine_num}) Reset detected before loading. Resetting to Stage 0...')
-        print(f'({machine_num}) Flushing PLC Fault Tags...\n')
+        print_color(f'({machine_num}) Reset detected before loading. Resetting to Stage 0...')
+        print_color(f'({machine_num}) Flushing PLC Fault Tags...\n')
         write_plc_flush(plc, machine_num)
         write_plc_single(plc, machine_num, 'Faulted', False)
         write_plc_single(plc, machine_num, 'PhoenixFltCode', 0)
         write_plc_single(plc, machine_num, 'KeyenceFltCode', 0)
         write_plc_single(plc, machine_num, 'FaultStatus', 0)
     elif reset_type == 'type_two':
-        print(f'({machine_num}) Reset detected after loading. Resetting to Stage 0...')
-        print(f'({machine_num}) Flushing PLC Fault Tags...\n')
+        print_color(f'({machine_num}) Reset detected after loading. Resetting to Stage 0...')
+        print_color(f'({machine_num}) Flushing PLC Fault Tags...\n')
         write_plc_flush(plc,machine_num)
         write_plc_single(plc, machine_num, 'Reset', False)
         write_plc_single(plc, machine_num, 'Faulted', False)
@@ -146,7 +188,7 @@ def reset_plc_tags(plc: LogixDriver, machine_num: str,reset_type:str) -> None:
         write_plc_single(plc, machine_num, 'Aborted', False)
 
 def set_bool_tags(plc:LogixDriver, machine_num:str) -> None:
-    print(f'({machine_num}) Setting Boolean Tags for Stage 0\n') #flag reset/beginning of timing diagram
+    print_color(f'({machine_num}) Setting Boolean Tags for Stage 0\n') #flag reset/beginning of timing diagram
     write_plc_single(plc, machine_num, 'Done', False)
     write_plc_single(plc, machine_num, 'Pass', False)
     write_plc_single(plc, machine_num, 'Busy', False)
@@ -178,7 +220,7 @@ def read_plc_single(plc:LogixDriver, machine_num:str, tag_name:str) -> dict:
         key = result_tag.tag.split(".")[-1]
         read_dict[key] = result_tag
     except Exception as error:
-        print(f'({machine_num}) {error} ERROR READING PLC TAG {tag_name}')
+        print_color(f'({machine_num}) {error} ERROR READING PLC TAG {tag_name}')
     return read_dict # Return the dictionary of tag values
 #END read_plc_singles
     
@@ -191,7 +233,7 @@ def int_array_to_str(int_array:list) -> str:
     """
     # List comprehension to convert each integer to its corresponding ASCII character. Then join the characters into a single string
     string = ''.join(chr(i) for i in int_array)
-    print(f"Converting PUN toString...\n{string}")
+    print_color(f"Converting PUN toString...\n{string}")
     return string
     
 #END int_array_to_str
