@@ -31,9 +31,6 @@ log_file_5 = f"{today}_ROBOT(5).log"
 logger_r3 = configure_logger("Logger_r3",log_file_3)
 logger_r4 = configure_logger("Logger_r4",log_file_4)
 logger_r5 = configure_logger("Logger_r5",log_file_5)
-
-    
-
 # handler.close()
 # logger.removeHandler(handler)
 #########################################################
@@ -79,6 +76,9 @@ class cycler:
         self.keyence_ip = keyence_ip
         self.current_stage = 0
     def cycle(self, machine_num, keyence_ip):
+        while not kill_threads.is_set():
+            self.run_cycle(machine_num, keyence_ip)
+    def run_cycle(self, machine_num, keyence_ip):
         kill_threads.clear()
         event.wait()
         time.sleep(.05)
@@ -182,6 +182,14 @@ class cycler:
                     # self.current_stage = 0
                     break  # Kill thread if global is set True for any reason
                 time.sleep(0.005)  # artificial loop timer
+        def start(self):
+            self.thread = threading.Thread(target=self.cycle, args=[self.machine_num, self.keyence_ip], name=f"machine_{self.machine_num}")
+            self.thread.start()
+        def restart(self):
+            self.thread.join()
+            self.thread = None
+            self.current_stage = 0
+            self.start()
 #END class Cycler
 def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we're still running and communicating
     config_info = read_config()
@@ -210,9 +218,8 @@ def main():
     for machine_num in list(config_info['mnKeyenceIP'].keys()):  # Loop through machines in config
         ip = config_info['mnKeyenceIP'][machine_num]
         cycle_object = cycler(machine_num, ip)
-        cycle_thread = threading.Thread(target=cycle_object.cycle, args=[machine_num, ip], name=f"machine_{machine_num}")
-        cycle_thread.start()
-        cycle_threads.append(cycle_thread)
+        cycle_object.start()  # Start the cycle thread
+        cycle_threads.append(cycle_object)
 
         heartbeat_thread = threading.Thread(target=heartbeat, args=[machine_num], name=f"{machine_num}_heartBeat")
         heartbeat_thread.start()
@@ -220,12 +227,22 @@ def main():
 
     event.set()  # Signal threads to start
 
+    while not kill_threads.is_set():
+        for cycle_obj in cycle_threads:
+            if cycle_obj.thread is not None and not cycle_obj.thread.is_alive():
+                # Thread has completed or was killed, restart it
+                cycle_obj.restart()
+
+        # You can add a delay here if you don't want to check the threads continuously
+        time.sleep(5)
+
+    # Properly clean up resources when the main thread exits
     for cycle_thread, heartbeat_thread in zip(cycle_threads, heartbeat_threads):
-        cycle_thread.join()
+        if cycle_thread.thread is not None:
+            cycle_thread.thread.join()
         heartbeat_thread.join()
-
-
 
 if __name__ == '__main__':
     main()
+
 
