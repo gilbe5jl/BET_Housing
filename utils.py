@@ -4,14 +4,47 @@ from tag_lists import *
 from pycomm3 import LogixDriver
 from export_data import *
 import socket
-import datetime
+import os
+import logging
+from datetime import datetime, timedelta,time
 
+def configure_logger(logger_name,log_file_name,machine_num):
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.DEBUG)
+    handler = logging.FileHandler(log_file_name)
+    now = datetime.now().strftime("%I:%M:%S")
+    formatter = logging.Formatter(f"{now} - %(levelname)s - ROBOT({machine_num})\n%(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+today = datetime.now().strftime("%a-%b-%d-%Y")
+log_file_3 = f"ROBOT(3)_{today}.log"
+log_file_4 = f"ROBOT(4)_{today}.log"
+log_file_5 = f"ROBOT(5)_{today}.log"
+logger_r3 = configure_logger("Logger_r3",log_file_3,3)
+logger_r4 = configure_logger("Logger_r4",log_file_4,4)
+logger_r5 = configure_logger("Logger_r5",log_file_5,5)
 
+def delete_old_logs():
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%a-%b-%d-%Y")
+    log_file_3 = f"ROBOT(3)_{yesterday}.log"
+    log_file_4 = f"ROBOT(4)_{yesterday}.log"
+    log_file_5 = f"ROBOT(5)_{yesterday}.log"
+    try:
+        os.remove(log_file_3)
+        os.remove(log_file_4)
+        os.remove(log_file_5)
+    except FileNotFoundError as error:
+        pass
+delete_old_logs()
+# os.remove(log_file_3)
+# os.remove(log_file_4)
+# os.remove(log_file_5)
 def extract_machine_num(message):
     # Find the opening parenthesis and closing parenthesis in the message
     start_index = message.find('(')
     end_index = message.find(')')
-
     # Check if both parentheses are found
     if start_index != -1 and end_index != -1:
         # Extract the substring between the parentheses
@@ -24,30 +57,30 @@ def extract_machine_num(message):
         except ValueError:
             # Handle the case where the substring cannot be converted to an integer
             return None
-
     return None  # Return None if the parentheses are not found
 def print_color(message:str)->None:
     machine_num = str(extract_machine_num(message))
     if machine_num == '3':
-        print_blue(message)
-    elif machine_num == '4':
         print_green(message)
+    elif machine_num == '4':
+        print_blue(message)
     elif machine_num == '5':
         print_yellow(message)
 
 
 def print_green(message:str)->None:
-    message = Fore.GREEN + f"{message}\n" + Style.RESET_ALL
-    # logger.info(message)
-    print(message)
+    logger_r3.info(message)
+    print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
 def print_blue(message:str)->None:
-    # logger.info(message)
+    logger_r4.info(message)
     print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
 def print_yellow(message:str)->None:
-    # logger.info(message)
+    logger_r5.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
 def print_red(message:str)->None:
-    # logger.critical(message)
+    logger_r3.critical(message)
+    logger_r4.critical(message)
+    logger_r5.critical(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
 def exe_time(start_time, end_time):
     return (end_time - start_time).total_seconds() * 1000
@@ -58,8 +91,8 @@ def read_config()->dict:
         return config_vars
 
 def get_status_info(machine_num:str,plc:LogixDriver)->list:
+    print_color(f'({machine_num})[STAGE:0] Reading PLC and gathering PART TYPE\n')
     config_info = read_config()
-    print_color(f'({machine_num}) Reading PLC\n')
     tag_data = read_plc_dict(plc, machine_num) #initial PLC tag read
     part_type = tag_data[config_info['tags']['PartType']][1]
     reset_check = read_plc_single(plc, machine_num, 'Reset')   # PLC read and check to reset system off PLC(Reset) tag
@@ -153,3 +186,5 @@ def get_stage_zero_data(plc:LogixDriver,machine_num:str):
 
 # x = extract_machine_num(message)
 # print(x)
+
+
