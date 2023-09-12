@@ -81,19 +81,23 @@ class create_cycle:
             while(True):
                 if(kill_threads.is_set()): #check reset at beginning of cycle
                     print_red(f'({machine_num}) kill_threads detected at cycle start! Restarting threads...\n')
-                    break
+                    # break # Here we need to exit or kill the current thread and restart it
+                    create_cycle(machine_num, keyence_ip).start() # restart the cycle by creating a new thread
                 #spec_map = check_keyene_spec(sock, spec_map)
                 part_type,reset_check,tag_data = get_status_info(machine_num, plc).values()#get part type and reset check from PLC
                 if (reset_check[config_info['tags']['Reset']][1]):
                     reset_plc_tags(plc, machine_num,'type_one')
                     self.current_stage = 0
-                    kill_threads.set()   
+                    kill_threads.set()
+                #################### STAGE ZERO ####################   
                 if(self.current_stage == 0):
                     start_stage_zero(machine_num, plc, sock, self.current_stage) #stage 0 function
                     while(tag_data[config_info['tags']['LoadProgram']][1] != True): #Looping until LOAD PROGRAM goes high  # Data from PLC is only valid while LOAD_PROGRAM is low
                         if (kill_threads.is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num})[STAGE:0] RESET detected while waiting for Load Program! Restarting thread...\n')
-                            break
+                            # break
+                            create_cycle(machine_num, keyence_ip).start()
+
                         tag_data,reset_check = get_stage_zero_data(plc,machine_num).values() #get data from PLC
                         if (reset_check[config_info['tags']['Reset']][1] == True):
                             self.current_stage = 0
@@ -101,7 +105,8 @@ class create_cycle:
                             kill_threads.set()
                         time.sleep(.050) # 5ms pause between reads
                     if (kill_threads.is_set()): #check for reset at beginning of cycle
-                        break
+                        # break
+                        create_cycle(machine_num, keyence_ip).start()
                     print_color(f'({machine_num}) PLC(LOAD_PROGRAM) activated. Retrieving part data and program number...') # Once PLC(LOAD_PROGRAM) goes high, mirror data and set Phoenix(READY) high, signifies end of "loading" process
                     swap_check, part_program, part_type = stage_zero_preLoad(machine_num, plc, sock).values()
                     if swap_check == 0: # reset threads if invalid part type
@@ -113,13 +118,14 @@ class create_cycle:
                         kill_threads.set()                               
                     stage_zero_load(plc, sock, machine_num, tag_data,keyence_string) 
                     self.current_stage += 1 #increment current stage to proceed forward
-                elif self.current_stage == 1:
                 #################### STAGE ONE ####################
+                elif self.current_stage == 1:
                     print_yellow(f'({machine_num})[STAGE:1] Waiting for START_PROGRAM...\n')
                     while not tag_data[config_info['tags']['StartProgram']][1]: #looping until PLC(START_PROGRAM) goes high
                         if (kill_threads.is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num})[STAGE:1] RESET detected while waiting for START_PROGRAM\n')
-                            break
+                            # break
+                            create_cycle(machine_num, keyence_ip).start()
                         tag_data = read_plc_dict(plc, machine_num) #continuous PLC read
                         if tag_data[config_info['tags']['Reset']][1]: #check for reset during cycle
                             self.current_stage = 0
@@ -144,7 +150,8 @@ class create_cycle:
                     while not tag_data[config_info['tags']['EndProgram']][1]:
                         if kill_threads.is_set():
                             print_red(f'({machine_num}) kill_threads detected while waiting for ENDPROGRAM! Restarting threads...\n')
-                            break
+                            # break
+                            create_cycle(machine_num, keyence_ip).start()
                         tag_data = read_plc_dict(plc, machine_num)  # continuous PLC read
                         if tag_data[config_info['tags']['Reset']][1]:
                             print_color(f'({machine_num}) (StartProgram Check) Reset Detected! Setting back to Stage 0...\n')
@@ -161,7 +168,8 @@ class create_cycle:
                 if (kill_threads.is_set()): #check for reset at beginning of cycle
                     print_red(f'({machine_num}) kill_threads detected at cycle end! Restarting threads...\n')
                     # self.current_stage = 0
-                    break  # Kill thread if global is set True for any reason
+                    # break  # Kill thread if global is set True for any reason
+                    create_cycle(machine_num, keyence_ip).start()
                 sleep_time.sleep(0.005)  # artificial loop timer
   
 #END class Cycler
@@ -171,18 +179,22 @@ def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we'
         try:
             write_plc_single(plc, machine_num, 'HeartBeat', True)
         except Exception as error:
-            print_red(f'({machine_num}) Exception in Heartbeat {error}')
+            print_red(f'({machine_num}-HB) Exception in Heartbeat {error}')
             kill_threads.set()
     with LogixDriver(config_info['plc_ip']) as plc:
-        print_color(f'({machine_num}) Heartbeat thread connected to PLC.\n')
+        print_color(f'({machine_num}-HB) Heartbeat thread connected to PLC.\n')
+        # while (True):
         counter = 0
         while not (kill_threads.is_set()):
             write_heartbeat(plc, machine_num)
             if (counter % 200) == 0:
-                print(f"({machine_num}) Active PLC Connection",end='\r')
+                print(f"({machine_num}-HB) Active PLC Connection",end='\r')
             counter += 1
             time.sleep(1)
-        print_red(f'({machine_num}) Heartbeat: kill_threads high or reset event set, restarting all threads')
+        print_red(f'({machine_num}-HB) Heartbeat: kill_threads high or reset event set, restarting all threads')
+        if (kill_threads.is_set()):
+            # kill_threads.clear()
+            heartbeat(machine_num)
    
 # END heartbeat
 def main():
@@ -244,5 +256,4 @@ def main():
 if __name__ == '__main__':
     while True:
         main()
-
 

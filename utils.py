@@ -103,6 +103,7 @@ def start_stage_zero(machine_num:str,plc:LogixDriver,sock:socket.socket,current_
     check_keyence_error(machine_num, sock, plc) #check keyence for error codes
     set_bool_tags(plc, machine_num)
 def stage_zero_preLoad(machine_num:str,plc:LogixDriver,sock:socket.socket)->int:
+    print()
     tag_data = read_plc_dict(plc, machine_num)
     tag_data_og = tag_data.copy()
     part_program = tag_data[config_info['tags']['PartProgram']][1] 

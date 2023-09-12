@@ -5,6 +5,7 @@ import sys
 import os
 import json
 from colorama import Fore, Style
+# from utils import logger_r3, logger_r4, logger_r5
 
 #
 
@@ -30,25 +31,30 @@ def extract_machine_num(message):
 def print_color(message:str)->None:
     machine_num = str(extract_machine_num(message))
     if machine_num == '3':
+        # logger_r3.info(message)
         print_blue(message)
     elif machine_num == '4':
+        # logger_r4.info(message)
         print_green(message)
     elif machine_num == '5':
+        # logger_r5.info(message)
         print_yellow(message)
 
 
 def print_green(message:str)->None:
-    message = Fore.GREEN + f"{message}\n" + Style.RESET_ALL
-    # logger.info(message)
-    print(message)
+    print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
 def print_blue(message:str)->None:
-    # logger.info(message)
     print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
 def print_yellow(message:str)->None:
-    # logger.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
 def print_red(message:str)->None:
-    # logger.critical(message)
+    machine_num = str(extract_machine_num(message))
+    # if machine_num == '3':
+    #     # logger_r3.critical(message)
+    # elif machine_num == '4':
+    #     # logger_r4.critical(message)
+    # elif machine_num == '5':
+    #     # logger_r5.critical(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
 
 with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
@@ -79,7 +85,7 @@ def read_plc_dict(plc_driver:LogixDriver, machine_number:str):
 #END read_plc_dict
 
 #Writing back to PLC to mirror data on LOAD
-def write_plc(plc:LogixDriver, machine_num:str, results:dict) ->None:
+def write_plc(plc: LogixDriver, machine_num: str, results: dict) -> None:
     """
     Write data back to PLC to mirror data on LOAD
     :param plc: PLC driver object
@@ -87,20 +93,24 @@ def write_plc(plc:LogixDriver, machine_num:str, results:dict) ->None:
     :param results: dictionary of tags and values
     :return: None
     """
-    prefix = 'Program:' + config_info['mnTagPrefix'][machine_num] + '.I.'
-    input_tags = tag_lists.input_tag_list(1)
-    for i in input_tags:
-        try:
+    try:
+        prefix = 'Program:' + config_info['mnTagPrefix'][machine_num] + '.I.'
+        input_tags = tag_lists.input_tag_list(1)
+        
+        for i in input_tags:
             tag = prefix + i
+            if i not in results:
+                raise KeyError(f"Tag '{i}' not found in the results dictionary.")
+            
             value = results[i][1]
             plc.write((tag, value))
-        except KeyError as error:
-            print_red(error)
-            # mml.log("e",True,f'({machine_num}) PLC write ERROR! KeyError:{error}')
-        except Exception as error:
-            print_red(error)
-            # mml.log("e",True,f'({machine_num}) PLC write ERROR! Exception:{str(error)}')
-#END write_plc
+            
+    except KeyError as key_error:
+        print_red(f"KeyError in write_plc: {key_error}")
+    except Exception as error:
+        print_red(f"An error occurred while writing to the PLC: {error}")
+# END write_plc
+
 
 
 def write_plc_fault_flush(plc:LogixDriver,machine_num:str)-> None:
