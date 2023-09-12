@@ -103,7 +103,7 @@ class create_cycle:
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num,'type_one')
                             kill_threads.set()
-                        time.sleep(.050) # 5ms pause between reads
+                        sleep_time.sleep(.050) # 5ms pause between reads
                     if (kill_threads.is_set()): #check for reset at beginning of cycle
                         # break
                         create_cycle(machine_num, keyence_ip).start()
@@ -131,7 +131,7 @@ class create_cycle:
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num, 'type_two') # type_two reset for stage 1
                             kill_threads.set()
-                        time.sleep(0.050)
+                        sleep_time.sleep(0.050)
                     print_color(f'({machine_num})[STAGE:1] PLC(START_PROGRAM) activated!\n')
                     exe_time,tag_data,start_trigger_timer = stage_one_trigger(plc, sock, machine_num, tag_data).values()
                     if (exe_time > 3000): # measure time it took to trigger keyence, if greater than 3 seconds, set fault
@@ -158,7 +158,7 @@ class create_cycle:
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num, 'type_two')  # type_two reset for stage 2
                             kill_threads.set()
-                        time.sleep(0.050)  # 5ms pause between reads
+                        sleep_time.sleep(0.050)  # 5ms pause between reads
                     reset_toEnd_cycle(plc, machine_num, sock)  # reset PLC tags to end cycle
                     self.current_stage = 0  # cycle complete, reset to stage 0
                 if abs(datetime.datetime.now() - connection_timer).total_seconds() > 86400:
@@ -190,7 +190,7 @@ def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we'
             if (counter % 200) == 0:
                 print(f"({machine_num}-HB) Active PLC Connection",end='\r')
             counter += 1
-            time.sleep(1)
+            sleep_time.sleep(1)
         print_red(f'({machine_num}-HB) Heartbeat: kill_threads high or reset event set, restarting all threads')
         if (kill_threads.is_set()):
             # kill_threads.clear()
