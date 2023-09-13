@@ -13,7 +13,7 @@ def configure_logger(logger_name,log_file_name,machine_num):
     logger.setLevel(logging.DEBUG)
     handler = logging.FileHandler(log_file_name)
     now = datetime.now().strftime("%I:%M:%S")
-    formatter = logging.Formatter(f"{now} - %(levelname)s - ROBOT({machine_num})\n%(message)s")
+    formatter = logging.Formatter(f"{now}-ROBOT({machine_num})-%(levelname)s-\n%(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.propagate = False
