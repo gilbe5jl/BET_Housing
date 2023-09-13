@@ -155,38 +155,7 @@ def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we'
         kill_threads.clear()
    
 # END heartbeat
-# def main():
-#     config_info = read_config()  # Read configuration information
-#     cycle_threads = []  # Store created cycle threads
-#     heartbeat_threads = []  # Store created heartbeat threads
-# # initilize each loop seperatly and then start them all at once each in thier own loop
 
-#     for machine_num in list(config_info['mnKeyenceIP'].keys()):  # Loop through machines in config
-#         ip = config_info['mnKeyenceIP'][machine_num]
-#         cycle_object = create_cycle(machine_num, ip)
-#         cycle_object.start()  # Start the cycle thread
-#         cycle_threads.append(cycle_object)
-
-#         heartbeat_thread = threading.Thread(target=heartbeat, args=[machine_num], name=f"{machine_num}_heartBeat")
-#         heartbeat_thread.start()
-#         heartbeat_threads.append(heartbeat_thread)
-
-#     event.set()  # Signal threads to start
-
-#     while not kill_threads.is_set():
-#         for cycle_obj in cycle_threads:
-#             if cycle_obj.thread is not None and not cycle_obj.thread.is_alive():
-#                 # Thread has completed or was killed, restart it
-#                 cycle_obj.start()
-
-#         # You can add a delay here if you don't want to check the threads continuously
-#         sleep_time.sleep(5)
-
-#     # Properly clean up resources when the main thread exits
-#     for cycle_thread, heartbeat_thread in zip(cycle_threads, heartbeat_threads):
-#         if cycle_thread.thread is not None:
-#             cycle_thread.thread.join()
-#         heartbeat_thread.join()
 def main():
     config_info = read_config()  # Read configuration information
     machine_num = [str(machine_num) for machine_num in config_info['keyence_ip']][0]
