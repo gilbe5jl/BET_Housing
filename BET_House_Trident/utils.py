@@ -69,13 +69,13 @@ def print_color(message:str)->None:
 
 
 def print_green(message:str)->None:
-    logger_r3.info(message)
+    # logger_r3.info(message)
     print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
 def print_blue(message:str)->None:
-    logger_r4.info(message)
+    # logger_r4.info(message)
     print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
 def print_yellow(message:str)->None:
-    logger_r5.info(message)
+    # logger_r5.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
 def print_red(message:str)->None:
     logger_r3.critical(message)

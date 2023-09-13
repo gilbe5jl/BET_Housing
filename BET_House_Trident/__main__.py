@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from utils import print_red
 
 def run_target_python_file(file_path):
     """
@@ -18,6 +19,7 @@ def run_target_python_file(file_path):
 
 if __name__ == "__main__":
     file_names = ["robot_3.py","robot_4.py","robot_5.py"] # Replace with the name of your Python file
+    print_red("PROGRAM STARTED\n")
     for file_name in file_names:
         current_directory = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(current_directory, file_name)

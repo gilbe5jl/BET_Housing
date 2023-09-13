@@ -30,10 +30,6 @@ class create_cycle:
         self.machine_num = machine_num
         self.keyence_ip = keyence_ip
         self.current_stage = 0
-    # def start(self):
-    #     self.current_stage = 0
-    #     self.thread = threading.Thread(target=self.cycle, args=[self.machine_num, self.keyence_ip], name=f"machine_{self.machine_num}")
-    #     self.thread.start()
     def cycle(self):
         machine_num = self.machine_num
         keyence_ip = self.keyence_ip
@@ -51,7 +47,7 @@ class create_cycle:
                 sock.connect((keyence_ip, 8500))
             except TimeoutError as error:
                 print("Keyence Connection Error: ", error)
-            print_color(f'({machine_num}) PLC Connection Successful...\n({machine_num}) Keyence_{machine_num} Connection Successful...\n')
+            print_color(f'\n({machine_num}) PLC Connection Successful...\n({machine_num}) Keyence_{machine_num} Connection Successful...\n')
            # setKeyenceRunMode(machine_num, sock)
             write_plc_fault_flush(plc,machine_num) # Fault Codes and raise ready
             connection_timer = datetime.datetime.now() #reset connection timer
@@ -175,8 +171,8 @@ def main():
     keyence_ip = config_info['keyence_ip'][machine_num]
     # Create an instance of the create_cycle class
     cycle_instance = create_cycle(machine_num, keyence_ip)
-    main_thread = threading.Thread(target=cycle_instance.cycle, name=f"ROBOT_{machine_num}")
-    heartbeat_thread = threading.Thread(target=heartbeat, args=[machine_num], name=f"{machine_num}_heartBeat")
+    main_thread = threading.Thread(target=cycle_instance.cycle, name=f"ROBOT_({machine_num})")
+    heartbeat_thread = threading.Thread(target=heartbeat, args=[machine_num], name=f"Heatbeat_({machine_num})")
     main_thread.start()
     heartbeat_thread.start()
     event.set()  # Signal threads to start
