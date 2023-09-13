@@ -29,10 +29,6 @@ class create_cycle:
         self.machine_num = machine_num
         self.keyence_ip = keyence_ip
         self.current_stage = 0
-    # def start(self):
-    #     self.current_stage = 0
-    #     self.thread = threading.Thread(target=self.cycle, args=[self.machine_num, self.keyence_ip], name=f"machine_{self.machine_num}")
-    #     self.thread.start()
     def cycle(self):
         machine_num = self.machine_num
         keyence_ip = self.keyence_ip
@@ -40,7 +36,7 @@ class create_cycle:
         event.wait()
         sleep_time.sleep(.05)
         config_info = read_config()
-        print_color(f'({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connecting to Keyence at {keyence_ip}\n')
+        print_color(f'\n({machine_num}) Sequence Started\n({machine_num}) Connecting to PLC at {config_info["plc_ip"]}\n({machine_num}) Connecting to Keyence at {keyence_ip}\n')
         scan_duration = 0 # keeping track of scan time in MS
         with LogixDriver(config_info['plc_ip']) as plc: #context manager for plc connection, currently resetting connection after ~24 hrs to avoid issues
             print_color(f'({machine_num}) PLC Connection Successful...\n({machine_num}) Keyence_{machine_num} Connection Successful...\n')
