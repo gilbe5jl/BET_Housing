@@ -58,5 +58,18 @@ def test_write_plc_successful():
     }
     assert write_plc(mock_plc, machine_num, results) is None
 
-print(test_read_plc_dict())
-print(test_write_plc_successful())
+# print(test_read_plc_dict())
+# print(test_write_plc_successful())
+def read_config()->dict:
+    with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
+        config_data = config_file.read()
+        config_map = json.loads(config_data)
+        return config_map
+config_info = read_config()
+machine_num = [str(machine_num) for machine_num in config_info['keyence_ip']][0]
+
+
+keyence_ip = config_info['keyence_ip'][machine_num]
+
+print(machine_num)
+print(keyence_ip)

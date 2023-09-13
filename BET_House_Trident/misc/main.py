@@ -149,23 +149,12 @@ class cycler:
         
         with LogixDriver(config_info['plc_ip']) as plc: #context manager for plc connection, currently resetting connection after ~24 hrs to avoid issues
             print_green(f'({machine_num}) ...PLC Connection Successful...\n')
-            # Keyence socket connections
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((keyence_ip, 8500))
             print_blue(f'({machine_num}) Connected to Keyence at {keyence_ip}\n')
            # setKeyenceRunMode(machine_num, sock)
-           
             write_plc_fault_flush(plc,machine_num) # Fault Codes and raise ready
-            
-          
-        
             connection_timer = datetime.datetime.now() #reset connection timer
-            
-
-            ###########################
-            #      CYCLE START        #
-            ###########################
-
             while(True):
 
                 if(kill_threads.is_set()): #check reset at beginning of cycle
