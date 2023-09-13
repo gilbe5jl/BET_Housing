@@ -15,7 +15,7 @@ def run_target_python_file(file_path):
     except Exception as e:
         print(f"Error in {file_path}: {e}")
 
-# Example usage:
+
 if __name__ == "__main__":
     file_names = ["robot_3.py","robot_4.py","robot_5.py"] # Replace with the name of your Python file
     for file_name in file_names:
