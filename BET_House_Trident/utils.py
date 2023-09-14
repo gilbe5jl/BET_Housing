@@ -6,7 +6,8 @@ from export_data import *
 import socket
 import os
 import logging
-from datetime import datetime, timedelta,time
+from datetime import timedelta,time
+from datetime import datetime 
 
 def configure_logger(logger_name,log_file_name,machine_num):
     logger = logging.getLogger(logger_name)
@@ -37,7 +38,7 @@ def delete_old_logs():
         os.remove(log_file_5)
     except FileNotFoundError as error:
         pass
-delete_old_logs()
+# delete_old_logs()
 # os.remove(log_file_3)
 # os.remove(log_file_4)
 # os.remove(log_file_5)
@@ -78,9 +79,13 @@ def print_yellow(message:str)->None:
     # logger_r5.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
 def print_red(message:str)->None:
-    logger_r3.critical(message)
-    logger_r4.critical(message)
-    logger_r5.critical(message)
+    mn = str(extract_machine_num(message))
+    if mn == '3':
+        logger_r3.critical(message)
+    if mn == '4':
+        logger_r4.critical(message)
+    if mn == '5':
+        logger_r5.critical(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
 def exe_time(start_time, end_time):
     return (end_time - start_time).total_seconds() * 1000
@@ -129,33 +134,38 @@ def stage_zero_load(plc: LogixDriver, sock: socket.socket, machine_num: str, tag
         keyence_string = str(pun_str[10:22]) + '_' + str(tag_data[config_info['tags']['Year']][1]) + '-' + datetime_info_len_check[0] + '-' + datetime_info_len_check[1] + '-' + datetime_info_len_check[2] + '-' + datetime_info_len_check[3] + '-' + datetime_info_len_check[4] + '_' + keyence_string
 
         load_keyence(sock, machine_num, str(tag_data[config_info['tags']['PartProgram']][1]), keyence_string, plc)
+        return keyence_string
     except Exception as error:
         print_color(f'({machine_num}) Error in utils.py//stage_zero_load: {error}')
         raise error
 
 def stage_one_trigger(plc: LogixDriver, sock: socket.socket, machine_num: str, tag_data: dict) -> None:
+    def exe_time(start_time, end_time):
+        return (end_time - start_time).total_seconds() * 1000
     try:
         tag_data = read_plc_dict(plc, machine_num)
-        start_trigger_timer = datetime.datetime.now()
+        start_trigger_timer = datetime.now()
         trigger_keyence(sock, machine_num, plc)
-        end_trigger_timer = datetime.datetime.now()
-        exe_time = exe_time(start_trigger_timer, end_trigger_timer)
-        return {"exe_time": exe_time, "tag_data": tag_data, "start_trigger_timer": start_trigger_timer}
+        end_trigger_timer = datetime.now()
+        ex_time = exe_time(start_trigger_timer, end_trigger_timer)
+        return {"exe_time": ex_time, "tag_data": tag_data, "start_trigger_timer": start_trigger_timer}
     except Exception as error:
         print_color(f'({machine_num}) Error in utils.py//stage_one_trigger: {error}')
         raise error
 
 def stage_one_post_trigger(plc: LogixDriver, sock: socket.socket, machine_num: str, tag_data: dict, start_trigger_timer) -> None:
+    def exe_time(start_time, end_time):
+        return (end_time - start_time).total_seconds() * 1000
     try:
-        monitor_end_scan(plc, machine_num, sock, plc)
-        end_trigger_timer = datetime.datetime.now()
+        monitor_end_scan(plc, machine_num, sock)
+        end_trigger_timer = datetime.now()
         scan_duration = (end_trigger_timer - start_trigger_timer).total_seconds() * 1000
         write_plc_single(plc, machine_num, 'Busy', False)
-        start_result_timer = datetime.datetime.now()
-        monitor_keyence_not_running(sock, machine_num)
-        end_result_timer = datetime.datetime.now()
-        exe_time = exe_time(start_result_timer, end_result_timer)
-        return {"scan_duration": scan_duration, "exe_time": exe_time, "tag_data": tag_data}
+        start_result_timer = datetime.now()
+        monitor_keyence_not_running(sock, machine_num,plc)
+        end_result_timer = datetime.now()
+        ex_time = exe_time(start_result_timer, end_result_timer)
+        return {"scan_duration": scan_duration, "exe_time": ex_time, "tag_data": tag_data}
     except Exception as error:
         print_color(f'({machine_num}) Error in utils.py//stage_one_post_trigger: {error}')
         raise error
@@ -170,15 +180,24 @@ def end_stage_one(plc: LogixDriver, sock: socket.socket, machine_num: str, tag_d
         print_color(f'({machine_num}) Error in utils.py//end_stage_one: {error}')
         raise error
     
-def get_stage_zero_data(plc:LogixDriver,machine_num:str):
+def get_stage_zero_tag_data(plc:LogixDriver,machine_num:str):
     try:
         tag_data = read_plc_dict(plc, machine_num) #continuous full PLC read
-        reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
-        return {"tag_data":tag_data,"reset_check":reset_check}
+        # reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
+        return tag_data
     except Exception as error:
         print_color(f'({machine_num}) Error in utils.py//get_stage_zero_data: {error}')
         raise error
-
+        
+    
+def get_stage_zero_reset_data(plc:LogixDriver,machine_num:str):
+    try:
+        # tag_data = read_plc_dict(plc, machine_num) #continuous full PLC read
+        reset_check = read_plc_single(plc, machine_num, 'Reset') #single plc tag read
+        return reset_check
+    except Exception as error:
+        print_color(f'({machine_num}) Error in utils.py//get_stage_zero_data: {error}')
+        raise error
 # move exe_time function to this file and call it from here so that these functions can return less variables 
 # machine_num = 3
 # message = f'({machine_num}) ...PLC Connection Successful...({machine_num})({machine_num})\n'

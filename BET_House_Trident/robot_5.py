@@ -62,7 +62,8 @@ class create_cycle:
                         if (kill_threads.is_set()): #check for reset at beginning of cycle
                             print_red(f'({machine_num})[STAGE:0] RESET detected while waiting for Load Program. Restarting thread...\n')
                             break
-                        tag_data,reset_check = get_stage_zero_data(plc,machine_num).values() #get data from PLC
+                        tag_data = get_stage_zero_tag_data(plc,machine_num)
+                        reset_check = get_stage_zero_reset_data(plc,machine_num) #get data from PLC
                         if (reset_check[config_info['tags']['Reset']][1] == True):
                             self.current_stage = 0
                             reset_plc_tags(plc, machine_num,'type_one')
@@ -79,7 +80,7 @@ class create_cycle:
                     keyence_string = keyence_string_generator(machine_num, part_type, tag_data, sock, config_info) #building out external Keyence string for scan file naming
                     if keyence_string == 'ERROR':
                         kill_threads.set()                               
-                    stage_zero_load(plc, sock, machine_num, tag_data,keyence_string) 
+                    keyence_string = stage_zero_load(plc, sock, machine_num, tag_data,keyence_string) 
                     self.current_stage += 1 #increment current stage to proceed forward
                 #################### STAGE ONE ####################
                 elif self.current_stage == 1:
@@ -101,7 +102,7 @@ class create_cycle:
                     scan_duration,exe_time,tag_data= stage_one_post_trigger(plc, sock, machine_num, tag_data, start_trigger_timer).values()
                     if exe_time > 3000:
                         write_plc_fault(plc, machine_num, 3)
-                    end_stage_one(plc, machine_num, sock, tag_data, scan_duration, keyence_string, part_type, part_program)
+                    end_stage_one(plc, sock, machine_num, tag_data, scan_duration, keyence_string, part_type, part_program)
                     print_color(f'({machine_num})[STAGE:1] Complete!\n')
                     self.current_stage += 1
                 #################### END STAGE ONE ####################
@@ -119,7 +120,7 @@ class create_cycle:
                             reset_plc_tags(plc, machine_num, 'type_two')  # type_two reset for stage 2
                             kill_threads.set()
                         sleep_time.sleep(0.050)  # 5ms pause between reads
-                    reset_toEnd_cycle(plc, machine_num, sock)  # reset PLC tags to end cycle
+                    reset_toEnd_cycle(plc, machine_num)  # reset PLC tags to end cycle
                     self.current_stage = 0  # cycle complete, reset to stage 0
                 if abs(datetime.datetime.now() - connection_timer).total_seconds() > 86400:
                     print_red(f'({machine_num}) Connection reset detected! restarting threads...\n')
@@ -137,8 +138,10 @@ def heartbeat(machine_num): #sets PLC(Heartbeat) high every second to verify we'
     def write_heartbeat(plc, machine_num):
         try:
             write_plc_single(plc, machine_num, 'HeartBeat', True)
-        except Exception as error:
-            print_red(f'({machine_num}-HB) Exception in Heartbeat {error}')
+        except TimeoutError as error:
+            print_red(f'({machine_num}-HB) Timeout in Heartbeat {error}')
+            # else:
+            print("Failed to establish PLC connection after multiple retries.")
             kill_threads.set()
     with LogixDriver(config_info['plc_ip']) as plc:
         print_color(f'({machine_num}-HB) Heartbeat connected to PLC.\n')

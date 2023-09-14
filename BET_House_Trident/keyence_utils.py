@@ -57,8 +57,11 @@ with open(os.path.join(sys.path[0], 'config.json'), "r") as config_file:
 
 def keyence_string_generator(machine_num: str, PartT: int, results_dict: dict, sock: socket.socket, config_info: dict):
     try:
-        scan_set = 'scan_names' + config_info['PartT_switch'][str(PartT)]
-        keyence_string = config_info[scan_set][str(results_dict[config_info['tags']['PartProgram']][1])] + f'_{config_info["PartT_switch"][str(PartT)]}'
+        print(f"Part Type: {PartT}")
+        print(f"Results: {results_dict}")
+        scan_set = 'scan_names' + config_info['part_type_switch'][str(PartT)]
+        keyence_string = config_info[scan_set][str(results_dict[config_info['tags']['PartProgram']][1])] + f'_{config_info["part_type_switch"][str(PartT)]}'
+        print(f"Keyence String:{keyence_string}")
     except Exception as error:
         print(f'({machine_num}) Error building Keyence String: Check Part Program & Part Type', error)
         return 'ERROR-KeyenceString'
@@ -181,10 +184,16 @@ def exit_keyence(sock: socket.socket,machine_num:str):
 # It then continuously checks the PLC tags' values until both conditions are met (either EndScan or Reset is True).
 def monitor_end_scan(plc: LogixDriver, machine_num: str, sock: socket.socket):
     print(f'({machine_num}) WAITING for PLC(END_SCAN)')
-    current = {tag: None for tag in ['EndScan', 'Reset']}
-    while not all(tag_value[1] for tag_value in current.values()):
-        current.update({tag: read_plc_single(plc, machine_num, tag) for tag in current})
-        time.sleep(0.005)
+    # current = {tag: None for tag in ['EndScan', 'Reset']}
+    # while not all(tag_value[1] for tag_value in current.values()):
+    #     current.update({tag: read_plc_single(plc, machine_num, tag) for tag in current})
+    #     time.sleep(0.005)
+    current = read_plc_single(plc,machine_num,'EndScan')
+    current.update(read_plc_single(plc,machine_num,'Reset'))
+    while((current[config_info['tags']['EndScan']][1] == False) and (current[config_info['tags']['Reset']][1]== False)):
+        current = read_plc_single(plc,machine_num,'EndScan')
+        current.update(read_plc_single(plc,machine_num,'Reset'))
+        time.sleep(.005)
     print(f'({machine_num}) End_Scan Signal Received - Scan Stopped')
     exit_keyence(sock,machine_num)  # Interrupt Keyence scan
 #END monitor_endScan
@@ -205,56 +214,108 @@ def monitor_keyence_not_running(sock: socket.socket, machine_num: str,plc:LogixD
 
 
 # read defect information from the Keyence, then passes that as well as pass,fail,done to PLC, returns a list of result data for .txt file creation
-def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: str)->list:
-    print(f'({machine_num}) SENDING RESULTS TO PLC...\n')
-    # Define result messages and PLC tags
-    result_mapping = {
-        '#ReportDefectCount': 'Defect_Number',
-        '#ReportLargestDefectSize': 'Defect_Size',
-        '#ReportLargestDefectZoneNumber': 'Defect_Zone',
-        '#ReportPass': 'Pass',
-        '#ReportFail': 'Fail',
-        '#ReportMaskFail': 'Mask_Fail',
-        '#ReportSizeFail': 'Size_Fail',
-        '#ReportSpacingFail': 'Spacing_Fail',
-        '#ReportDensityFail': 'Density_Fail'
-    }
-    results = []
-    # Read and store results, then write to PLC tags
-    for msg, plc_tag in result_mapping.items():
-        sock.sendall(f'MR,{msg}\r\n'.encode())
-        data = sock.recv(32)
-        keyence_value = int(str(data).split('+')[1])
-        write_plc_single(plc, machine_num, plc_tag, keyence_value)
-        results.append(keyence_value)
+# def keyence_results_to_PLC(sock: socket.socket, plc: LogixDriver, machine_num: str)->list:
+#     print(f'({machine_num}) SENDING RESULTS TO PLC...\n')
+#     # Define result messages and PLC tags
+#     result_mapping = {
+#         '#ReportDefectCount': 'DefectNumber',
+#         '#ReportLargestDefectSize': 'DefectSize',
+#         '#ReportLargestDefectZoneNumber': 'DefectZone',
+#         '#ReportPass': 'Pass',
+#         '#ReportFail': 'Fail',
+#         '#ReportMaskFail': 'MaskFail',
+#         '#ReportSizeFail': 'SizeFail',
+#         '#ReportSpacingFail': 'SpacingFail',
+#         '#ReportDensityFail': 'DensityFail'
+#     }
+#     results = []
+#     # Read and store results, then write to PLC tags
 
-    # Set 'Done' tag to True
+#     for msg, plc_tag in result_mapping.items():
+#         encode_message = f"MR,{msg}\r\n".encode()
+#         sock.sendall(encode_message)
+#         data = sock.recv(32)
+#         n = str(data).split('.')
+#         m = n[0].split('+')
+#         o = int(m[1])
+#         data = int(o)
+#         write_plc_single(plc, machine_num, plc_tag, data)
+#         results.append(data)
+
+#     # Set 'Done' tag to True
+
+#     # Print results
+#     print(f"({machine_num})KEYENCE RESULTS:")
+#     for msg, plc_tag in result_mapping.items():
+#         print(f'\t({machine_num}) {plc_tag}: {read_plc_single(plc, machine_num, plc_tag)[plc_tag][1]}')
+#     write_plc_single(plc, machine_num, 'Done', True)
+#     return results
+# # END keyenceResults_to_PLC
+
+def keyence_results_to_PLC(sock:socket.socket, plc:LogixDriver, machine_num:str):
+    #read results from Keyence then pass to proper tags on PLC
+    result_messages = ['MR,#ReportDefectCount\r\n', 'MR,#ReportLargestDefectSize\r\n', 'MR,#ReportLargestDefectZoneNumber\r\n', 'MR,#ReportPass\r\n', 'MR,#ReportFail\r\n',
+                        'MR,#ReportMaskFail\r\n', 'MR,#ReportSizeFail\r\n', 'MR,#ReportSpacingFail\r\n', 'MR,#ReportDensityFail\r\n']
+    results = []
+
+    # sending result messages to Keyence, then cleaning results to 'human-readable' list
+    for msg in result_messages:
+        sock.sendall(msg.encode())
+        data = sock.recv(32)
+        keyence_value_raw = str(data).split('.')
+        keyence_value_raw = keyence_value_raw[0].split('+')
+        keyence_value = int(keyence_value_raw[1])
+        results.append(keyence_value)
+        # print("KEYENCE Results RAW --",data)
+        # print("KEYENCE Results COOKED --",keyence_value)
+
+    print(f'({machine_num}) Defect_Number: {results[0]}')
+    print(f'({machine_num}) Defect_Size: {results[1]}')
+    print(f'({machine_num}) Defect_Zone: {results[2]}')
+    print(f'({machine_num}) Pass: {results[3]}')
+    print(f'({machine_num}) Fail: {results[4]}')
+    print(f'({machine_num}) Mask_Fail: {results[5]}')
+    print(f'({machine_num}) Size_Fail: {results[6]}')
+    print(f'({machine_num}) Spacing_Fail: {results[7]}')
+    print(f'({machine_num}) Density_Fail: {results[8]}')
+
+    # writing normalized Keyence results to proper PLC tags
+    
+    tag_list = ['DEFECT_NUMBER','DEFECT_SIZE','DEFECT_ZONE','PASS','FAIL','MASK_FAIL','SIZE_FAIL','SPACING_FAIL','DENSITY_FAIL']
+    result_hash = dict(zip(tag_list,results))
+    result_tag_list = tag_lists.result_tag_list()
+    for i in range(len(result_tag_list)):
+        write_plc_single(plc, machine_num, result_tag_list[i], results[i])
     write_plc_single(plc, machine_num, 'Done', True)
 
-    # Print results
-    print(f"({machine_num})KEYENCE RESULTS:")
-    for msg, plc_tag in result_mapping.items():
-        print(f'\t({machine_num}) {plc_tag}: {read_plc_single(plc, machine_num, plc_tag)[plc_tag][1]}')
-    return results
-# END keyenceResults_to_PLC
+    print(f'({machine_num}) Keyence Results written to PLC!')
+  
+    
+    # return {results[i]: result_tags[i] for i in range(len(results))} #return results to use in result files
+    return [results,result_hash]
+#END keyenceResults_to_PLC
+
 
 
 def check_keyence_error(machine_num:str, sock:socket.socket, plc:LogixDriver):
     # error_msg = 'MR,%Error0Code\r\n'
     # sock.sendall(error_msg.encode())
-    # data = int(sock.recv(32).decode().split('+')[1])
-    data = 0
-    if(data < 16):
-        # print(f'({machine_num}) Error Code:\n',data)
-        write_plc_single(plc, machine_num, 'Faulted', True)
-        write_plc_single(plc, machine_num, 'PhoenixFltCode', data)
-    elif(data >= 16 and data < 48):
-        # print(f'({machine_num}) Error Code:\n',data)
-        write_plc_single(plc, machine_num, 'Faulted', True)
-        write_plc_single(plc, machine_num, 'KeyenceFltCode', data)
-    else:
-        # print(f'({machine_num}) Error Code (non-crit):{data}\n')
-        pass
+    # n = str(data).split('.')
+    # m = n[0].split('+')
+    # o = int(m[1])
+    # data = int(o)
+    # if(data < 16):
+    #     # print(f'({machine_num}) Error Code:\n',data)
+    #     write_plc_single(plc, machine_num, 'Faulted', True)
+    #     write_plc_single(plc, machine_num, 'PhoenixFltCode', data)
+    # elif(data >= 16 and data < 48):
+    #     # print(f'({machine_num}) Error Code:\n',data)
+    #     write_plc_single(plc, machine_num, 'Faulted', True)
+    #     write_plc_single(plc, machine_num, 'KeyenceFltCode', data)
+    # else:
+    #     # print(f'({machine_num}) Error Code (non-crit):{data}\n')
+    #     pass
+    pass
 
 
 
@@ -279,12 +340,49 @@ def keyence_check_pass(machine_num: str, sock: socket.socket, plc: LogixDriver):
         '4': 'Program:DU050CA03.CAM01.I.Check_Pass.',
         '5': 'Program:DU050CA03.CAM02.I.Check_Pass.'
     }
-
+    tag_values = []
     for cmd, tag in zip(keyence_commands, check_pass_tags.get(machine_num, [])):
         sock.sendall(cmd.encode())
         data = sock.recv(32)
-        keyence_value_raw = int(str(data).split('+')[1])
-        write_plc_check_pass(plc, machine_num, f"{tag}{machine_num}", keyence_value_raw)
+        # keyence_value_raw = int(str(data).split('+')[1])
+        n = str(data).split('.')
+        m = n[0].split('+')
+        o = int(m[1])
+        data = o
+        # write_plc_check_pass(plc, machine_num, f"{tag}{machine_num}", data)
+        tag_values.append(data)
+
+
+
+        # keyence_commands = ['MR,#Hole1\r\n','MR,#Hole2\r\n','MR,#Hole3\r\n','MR,#Hole4\r\n']
+        # check_pass_data = []
+        # for cmd in keyence_commands:
+        #     sock.sendall(cmd.encode())
+        #     data = sock.recv(32)
+        # # keyence_value_raw = int(str(data).split('+')[1])
+        #     n = str(data).split('.')
+        #     m = n[0].split('+')
+        #     o = int(m[1])
+        #     data = o
+        #     check_pass_data.append(data)
+        # check_pass_tags = [
+        #     'Program:DU050CA02.CAM01.I.Check_Pass.3',
+        #     'Program:DU050CA03.CAM01.I.Check_Pass.4',
+        #     'Program:DU050CA03.CAM02.I.Check_Pass.5'
+        #     ]
+    check_pass_tags = {
+        '3':"Program:DU050CA02.CAM01.I.Check_Pass.",
+        '4':"Program:DU050CA03.CAM01.I.Check_Pass.",
+        '5':"Program:DU050CA03.CAM02.I.Check_Pass."
+        }
+    tags = []
+    for i in range(1,5):
+        tag_prefix = check_pass_tags[machine_num]
+        full_tag_name =  f"{tag_prefix}{i}"
+        tags.append(full_tag_name)
+    for i,j in zip(tags,tag_values):
+        write_plc_check_pass(plc,machine_num,i,j)
+            
 # END keyence_check_pass
     
 def check_pass_flush(plc,machine_num):
