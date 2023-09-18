@@ -9,7 +9,7 @@ import logging
 from datetime import timedelta,time
 from datetime import datetime 
 
-def configure_logger(logger_name,log_file_name,machine_num):
+def configure_logger(logger_name,log_file_name,machine_num:str):
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
     handler = logging.FileHandler(log_file_name)
@@ -19,23 +19,16 @@ def configure_logger(logger_name,log_file_name,machine_num):
     logger.addHandler(handler)
     logger.propagate = False
     return logger
-today = datetime.now().strftime("%a-%b-%d-%Y")
-log_file_3 = f"ROBOT(3)_{today}.log"
-log_file_4 = f"ROBOT(4)_{today}.log"
-log_file_5 = f"ROBOT(5)_{today}.log"
-logger_r3 = configure_logger("Logger_r3",log_file_3,3)
-logger_r4 = configure_logger("Logger_r4",log_file_4,4)
-logger_r5 = configure_logger("Logger_r5",log_file_5,5)
+# today = datetime.now().strftime("%a-%b-%d-%Y")
+# log_file_3 = f"Log_{today}.log"
+# logger_r3 = configure_logger("Logger_r3",log_file_3,3)
+
 
 def delete_old_logs():
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%a-%b-%d-%Y")
-    log_file_3 = f"ROBOT(3)_{yesterday}.log"
-    log_file_4 = f"ROBOT(4)_{yesterday}.log"
-    log_file_5 = f"ROBOT(5)_{yesterday}.log"
+    log_file_3 = f"Log_{yesterday}.log"
     try:
         os.remove(log_file_3)
-        os.remove(log_file_4)
-        os.remove(log_file_5)
     except FileNotFoundError as error:
         pass
 # delete_old_logs()
@@ -70,23 +63,20 @@ def print_color(message:str)->None:
 
 
 def print_green(message:str)->None:
-    # logger_r3.info(message)
     print(Fore.GREEN + f"{message}\n" + Style.RESET_ALL)
 def print_blue(message:str)->None:
-    # logger_r4.info(message)
     print(Fore.BLUE + f"{message}" + Style.RESET_ALL)
 def print_yellow(message:str)->None:
-    # logger_r5.info(message)
     print(Fore.YELLOW + f"{message}" + Style.RESET_ALL)
 def print_red(message:str)->None:
-    mn = str(extract_machine_num(message))
-    if mn == '3':
-        logger_r3.critical(message)
-    if mn == '4':
-        logger_r4.critical(message)
-    if mn == '5':
-        logger_r5.critical(message)
+    machine_num = str(extract_machine_num(message))
+    today = datetime.now().strftime("%a-%b-%d-%Y")
+    log_file = f"Log_{today}.log"
+    logger = configure_logger("Logger_r3",log_file,machine_num)
+    logger.info(message)
     print(Fore.RED + f"{message}" + Style.RESET_ALL)
+
+
 def exe_time(start_time, end_time):
     return (end_time - start_time).total_seconds() * 1000
 def read_config()->dict:
@@ -94,6 +84,7 @@ def read_config()->dict:
         config_data = config_file.read()
         config_vars = json.loads(config_data)
         return config_vars
+
 
 def get_status_info(machine_num:str,plc:LogixDriver)->list:
     print_color(f'({machine_num})[STAGE:0] Reading PLC and gathering PART TYPE\n')

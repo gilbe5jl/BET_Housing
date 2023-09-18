@@ -176,6 +176,6 @@ def main():
     heartbeat_thread.join() # Wait for heartbeat thread to exit
 
 if __name__ == '__main__':
-    while True:
+    # while True:
         main()
 
