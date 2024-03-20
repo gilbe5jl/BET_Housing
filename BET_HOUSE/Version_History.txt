@@ -1,0 +1,11 @@
+2/13/2024, 11:27AM
+
+Adding Z_1_Pass/Fail and Z_2_Pass/Fail
+Keyence will output if the Z fails.
+In keyence the variable will be called "Z1_pass" & "Z2_pass"
+keyence_utils.py
+
+2/26/2024
+
+Finsihed adding the Z_Point1_Pass and Z_Point2_Pass variables 
+Data should be output throught the export_data.py files 
