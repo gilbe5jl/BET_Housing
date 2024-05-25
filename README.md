@@ -1,4 +1,3 @@
-# BlankMiddleMan
 #PLC - Keyence Automation
 
 To run the program, simply open and execute the __main__.py file.
